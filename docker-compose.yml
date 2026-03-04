@@ -1,0 +1,94 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: taskcash
+      POSTGRES_USER: taskcash
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Порт намеренно не экспортируется наружу — DB доступна только контейнерам
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskcash"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    # Redis тоже только внутри сети
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: ./backend
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: celery -A app.workers.celery_app worker -l info -Q verification,notifications
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host
+
+  admin:
+    build: ./admin
+    ports:
+      - "5174:5174"
+    volumes:
+      - ./admin:/app
+      - /app/node_modules
+    command: npm run dev -- --host --port 5174
+
+  user_bot:
+    build: ./bot
+    env_file: .env
+    depends_on:
+      - backend
+    volumes:
+      - ./bot:/app
+    command: python user_bot.py
+    restart: always
+
+  admin_bot:
+    build: ./bot
+    env_file: .env
+    depends_on:
+      - backend
+    volumes:
+      - ./bot:/app
+    command: python admin_bot.py
+    restart: always
+
+volumes:
+  postgres_data:
+  redis_data:
