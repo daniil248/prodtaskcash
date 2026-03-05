@@ -105,6 +105,7 @@ async def telegram_auth(
             raise HTTPException(status_code=403, detail="Аккаунт заблокирован")
 
         user.first_name = tg_user.get("first_name", user.first_name)
+        user.last_name = tg_user.get("last_name", user.last_name)
         user.username = tg_user.get("username", user.username)
         user.last_ip = client_ip or user.last_ip
         if tg_user.get("photo_url"):

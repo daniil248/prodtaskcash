@@ -15,11 +15,6 @@ export default function SplashPage() {
       tg.expand()
     }
 
-    if (token) {
-      navigate('/tasks', { replace: true })
-      return
-    }
-
     const getFingerprint = (): string => {
       const parts = [
         navigator.userAgent,
@@ -60,17 +55,24 @@ export default function SplashPage() {
         const referralCode = tg?.initDataUnsafe?.start_param
         const fingerprint = getFingerprint()
         const { data } = await authApi.telegram(initData, referralCode, fingerprint)
-        // photo_url comes from backend (stored from validated initData)
-        // fall back to unsafe client value if backend doesn't have it yet
         const photoUrl = data.user.photo_url || tg?.initDataUnsafe?.user?.photo_url || null
         setAuth(data.access_token, { ...data.user, photo_url: photoUrl })
         navigate('/tasks', { replace: true })
       } catch {
-        setError(true)
+        // If token already exists, don't block — just navigate
+        if (token) navigate('/tasks', { replace: true })
+        else setError(true)
       }
     }
 
-    init()
+    // Always call auth to refresh user data (total_earned, balance, etc.)
+    // If token exists — navigate immediately and refresh in background
+    if (token) {
+      navigate('/tasks', { replace: true })
+      init().catch(() => {})
+    } else {
+      init()
+    }
   }, [])
 
   const logoBlock = (

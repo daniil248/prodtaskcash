@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { profileApi, withdrawalsApi, bonusesApi } from '../api/client'
 import { useStore } from '../store'
 import { showToast } from '../components/Toast'
-import type { Transaction, TransactionType, Bonuses } from '../types'
+import type { Transaction, TransactionType, Bonuses, Withdrawal } from '../types'
 
 // ── exact SVG colors ──────────────────────────────────────────────
 const C = {
@@ -179,10 +179,29 @@ function HistoryIcon() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// ── Withdrawal status labels and colors ──────────────────────────────────────
+const W_STATUS: Record<string, { label: string; color: string; bg: string }> = {
+  created:        { label: 'Создана',           color: '#4D536D', bg: '#F0F1F8' },
+  processing:     { label: 'В обработке',       color: '#8B6200', bg: '#FDF3CD' },
+  security_check: { label: 'Проверка',          color: '#8B6200', bg: '#FDF3CD' },
+  paid:           { label: 'Выплачено',         color: '#047935', bg: '#E2F3EE' },
+  rejected:       { label: 'Отклонено',         color: '#EF4444', bg: '#FEE2E2' },
+}
+
+const TX_FILTERS: { key: TransactionType | ''; label: string }[] = [
+  { key: '',               label: 'Все' },
+  { key: 'task_reward',    label: 'Задания' },
+  { key: 'referral_bonus', label: 'Рефералы' },
+  { key: 'withdrawal',     label: 'Выводы' },
+]
+
 export default function ProfilePage() {
   const { profile, setProfile, user } = useStore()
   const [bonuses, setBonuses] = useState<Bonuses | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
+  const [txFilter, setTxFilter] = useState<TransactionType | ''>('')
+  const [historyTab, setHistoryTab] = useState<'tx' | 'wd'>('tx')
 
   const [txPage, setTxPage] = useState(1)
   const [txPages, setTxPages] = useState(1)
@@ -202,7 +221,6 @@ export default function ProfilePage() {
     try {
       const { data } = await profileApi.transactions({ page: p, page_size: PAGE_SIZE, tx_type: typeFilter || undefined })
       setTransactions((prev) => append ? [...prev, ...data.items] : data.items)
-
       setTxPage(data.page)
       setTxPages(data.pages)
     } finally {
@@ -216,13 +234,21 @@ export default function ProfilePage() {
       profileApi.get(),
       bonusesApi.get(),
       profileApi.transactions({ page: 1, page_size: 1, tx_type: 'task_reward' }),
-    ]).then(([p, b, ct]) => {
+      withdrawalsApi.list(),
+    ]).then(([p, b, ct, wd]) => {
       setProfile(p.data)
       setBonuses(b.data)
       setCompletedCount(ct.data.total)
+      setWithdrawals(wd.data)
     })
     loadTransactions(1, '')
   }, [])
+
+  // Reload transactions when filter changes
+  useEffect(() => {
+    setTxPage(1)
+    loadTransactions(1, txFilter)
+  }, [txFilter])
 
   const handleWithdraw = async () => {
     const amount = parseFloat(wAmount)
@@ -435,90 +461,153 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── ИСТОРИЯ ВЫПЛАТ — header from SVG: history icon + label uppercase ── */}
-        <div style={{ padding: '20px 16px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <HistoryIcon />
-          <span style={{ fontSize: 13, fontWeight: 700, color: C.accent, letterSpacing: 0.3 }}>
-            ИСТОРИЯ ВЫПЛАТ
-          </span>
+        {/* ── HISTORY TAB BAR ─────────────────────────────────────────────── */}
+        <div style={{ padding: '20px 16px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <HistoryIcon />
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.accent, letterSpacing: 0.3 }}>
+              ИСТОРИЯ
+            </span>
+          </div>
+          {/* Tabs: Транзакции | Заявки на вывод */}
+          <div style={{ display: 'flex', background: '#F0F1F8', borderRadius: 12, padding: 3, gap: 3 }}>
+            {([['tx', 'Транзакции'], ['wd', 'Заявки на вывод']] as const).map(([key, label]) => (
+              <button key={key} onClick={() => setHistoryTab(key)} style={{
+                flex: 1, padding: '8px 4px', borderRadius: 10, border: 'none',
+                background: historyTab === key ? C.white : 'none',
+                color: historyTab === key ? C.accent : C.sub,
+                fontWeight: historyTab === key ? 700 : 500,
+                fontSize: 13, cursor: 'pointer',
+                boxShadow: historyTab === key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                transition: 'all 0.15s',
+              }}>{label}</button>
+            ))}
+          </div>
         </div>
 
-        {/* ── TRANSACTION LIST ── */}
-        <div style={{ padding: '10px 16px' }}>
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" /></div>
-          ) : transactions.length === 0 ? (
-            /* Empty state exactly from SVG: "У вас пока нет выплат" + subtitle + green button */
-            <div style={{ textAlign: 'center', padding: '32px 0 16px' }}>
-              <p style={{ fontSize: 15, fontWeight: 600, color: C.label, marginBottom: 6 }}>
-                У вас пока нет выплат
-              </p>
-              <p style={{ fontSize: 13, color: C.accent, marginBottom: 20 }}>
-                Выполняйте задания и зарабатывайте!
-              </p>
-              <button
-                onClick={() => navigate('/tasks')}
-                style={{
+        {/* ── TRANSACTIONS ────────────────────────────────────────────────── */}
+        {historyTab === 'tx' && (
+          <div style={{ padding: '10px 16px' }}>
+            {/* Type filter chips */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, overflowX: 'auto', paddingBottom: 2 }}>
+              {TX_FILTERS.map(({ key, label }) => (
+                <button key={key} onClick={() => setTxFilter(key)} style={{
+                  padding: '5px 12px', borderRadius: 100, border: 'none', flexShrink: 0,
+                  background: txFilter === key ? C.accent : C.white,
+                  color: txFilter === key ? C.white : C.label,
+                  fontWeight: 600, fontSize: 12, cursor: 'pointer',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+                }}>{label}</button>
+              ))}
+            </div>
+
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" /></div>
+            ) : transactions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 0 16px' }}>
+                <p style={{ fontSize: 15, fontWeight: 600, color: C.label, marginBottom: 6 }}>
+                  У вас пока нет транзакций
+                </p>
+                <p style={{ fontSize: 13, color: C.accent, marginBottom: 20 }}>
+                  Выполняйте задания и зарабатывайте!
+                </p>
+                <button onClick={() => navigate('/tasks')} style={{
                   height: 46, borderRadius: 23, border: 'none',
                   background: GRAD, color: C.white,
-                  fontWeight: 700, fontSize: 15, cursor: 'pointer',
-                  padding: '0 28px',
-                }}
-              >
-                Просмотреть активные задачи
-              </button>
-            </div>
-          ) : (
-            <>
-              <div style={{ background: C.white, borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                {transactions.map((tx, i) => (
-                  <div key={tx.id}>
-                    <div style={{ padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{
-                          width: 38, height: 38, borderRadius: '50%',
-                          background: C.bg,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          flexShrink: 0,
-                        }}>
-                          <HistoryIcon />
+                  fontWeight: 700, fontSize: 15, cursor: 'pointer', padding: '0 28px',
+                }}>
+                  Просмотреть задания
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{ background: C.white, borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                  {transactions.map((tx, i) => (
+                    <div key={tx.id}>
+                      <div style={{ padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ width: 38, height: 38, borderRadius: '50%', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <HistoryIcon />
+                          </div>
+                          <div>
+                            <p style={{ fontSize: 13, fontWeight: 600, color: C.name }}>{tx.description}</p>
+                            <p style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>
+                              {new Date(tx.created_at).toLocaleDateString('ru', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p style={{ fontSize: 13, fontWeight: 600, color: C.name }}>{tx.description}</p>
-                          <p style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>
-                            {new Date(tx.created_at).toLocaleDateString('ru', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        <span style={{ fontWeight: 700, fontSize: 14, color: parseFloat(tx.amount) >= 0 ? C.accent : '#EF4444', whiteSpace: 'nowrap' }}>
+                          {parseFloat(tx.amount) >= 0 ? '+' : ''}{parseFloat(tx.amount).toFixed(2)}₽
+                        </span>
+                      </div>
+                      {i < transactions.length - 1 && <div style={{ height: 1, background: C.border, margin: '0 16px' }} />}
+                    </div>
+                  ))}
+                </div>
+                {txPage < txPages && (
+                  <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                    <button onClick={() => loadTransactions(txPage + 1, txFilter, true)} disabled={txLoadingMore} style={{
+                      padding: '8px 24px', borderRadius: 100,
+                      border: `1.5px solid ${C.accent}`, background: 'none', color: C.accent,
+                      fontWeight: 600, fontSize: 13, cursor: txLoadingMore ? 'default' : 'pointer',
+                      opacity: txLoadingMore ? 0.6 : 1,
+                    }}>
+                      {txLoadingMore ? 'Загрузка...' : 'Ещё'}
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── WITHDRAWALS ─────────────────────────────────────────────────── */}
+        {historyTab === 'wd' && (
+          <div style={{ padding: '10px 16px' }}>
+            {withdrawals.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px 0 16px' }}>
+                <p style={{ fontSize: 15, fontWeight: 600, color: C.label, marginBottom: 6 }}>
+                  Заявок на вывод нет
+                </p>
+                <p style={{ fontSize: 13, color: C.sub }}>
+                  Создайте первую заявку через кнопку «Вывести деньги»
+                </p>
+              </div>
+            ) : (
+              <div style={{ background: C.white, borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+                {withdrawals.map((wd, i) => {
+                  const s = W_STATUS[wd.status] ?? { label: wd.status, color: C.sub, bg: C.bg }
+                  const methodLabel = wd.method === 'card' ? '💳 На карту' : '📱 СБП'
+                  return (
+                    <div key={wd.id}>
+                      <div style={{ padding: '13px 16px', display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: C.name }}>{methodLabel}</span>
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 100, background: s.bg, color: s.color }}>{s.label}</span>
+                          </div>
+                          <p style={{ fontSize: 11, color: C.sub }}>{wd.requisites}</p>
+                          <p style={{ fontSize: 11, color: C.sub, marginTop: 1 }}>
+                            {new Date(wd.created_at).toLocaleDateString('ru', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            {wd.processed_at && ` → ${new Date(wd.processed_at).toLocaleDateString('ru', { day: '2-digit', month: 'short' })}`}
                           </p>
+                          {wd.admin_note && (
+                            <p style={{ fontSize: 11, color: '#EF4444', marginTop: 2 }}>{wd.admin_note}</p>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <p style={{ fontSize: 15, fontWeight: 800, color: C.name }}>{parseFloat(wd.amount).toFixed(0)}₽</p>
+                          <p style={{ fontSize: 11, color: C.sub }}>−{parseFloat(wd.fee).toFixed(0)}₽ комиссия</p>
                         </div>
                       </div>
-                      <span style={{
-                        fontWeight: 700, fontSize: 14,
-                        color: parseFloat(tx.amount) >= 0 ? C.accent : '#EF4444',
-                        whiteSpace: 'nowrap',
-                      }}>
-                        {parseFloat(tx.amount) >= 0 ? '+' : ''}{parseFloat(tx.amount).toFixed(2)}₽
-                      </span>
+                      {i < withdrawals.length - 1 && <div style={{ height: 1, background: C.border, margin: '0 16px' }} />}
                     </div>
-                    {i < transactions.length - 1 && (
-                      <div style={{ height: 1, background: C.border, margin: '0 16px' }} />
-                    )}
-                  </div>
-                ))}
+                  )
+                })}
               </div>
-              {txPage < txPages && (
-                <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                  <button onClick={() => loadTransactions(txPage + 1, '', true)} disabled={txLoadingMore} style={{
-                    padding: '8px 24px', borderRadius: 100,
-                    border: `1.5px solid ${C.accent}`, background: 'none', color: C.accent,
-                    fontWeight: 600, fontSize: 13, cursor: txLoadingMore ? 'default' : 'pointer',
-                    opacity: txLoadingMore ? 0.6 : 1,
-                  }}>
-                    {txLoadingMore ? 'Загрузка...' : 'Ещё'}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         <div style={{ height: 32 }} />
       </div>
