@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { tasksApi, settingsApi } from '../api/client'
+import { tasksApi, settingsApi, profileApi } from '../api/client'
 import { useStore } from '../store'
 import { calcLevel } from '../utils/level'
 import type { Task, SortType } from '../types'
@@ -267,7 +267,7 @@ function NewsBanner({ featuredTask, bannerBudget }: { featuredTask: Task | null;
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function TasksPage() {
   const navigate = useNavigate()
-  const { completedToday, setTasks, user, profile } = useStore()
+  const { completedToday, setTasks, user, profile, setProfile, setUser } = useStore()
   const [tasks, setLocalTasks] = useState<Task[]>([])
   const [tab, setTab] = useState<StatusTab>('new')
   const [sort, setSort] = useState<SortType>('default')
@@ -289,6 +289,14 @@ export default function TasksPage() {
   }, [setTasks])
 
   useEffect(() => { load(sort) }, [sort, load])
+
+  // Always fetch fresh profile on mount so level is never stale
+  useEffect(() => {
+    profileApi.get().then(({ data }) => {
+      setProfile(data)
+      setUser(data)
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     settingsApi.public().then(({ data }) => {

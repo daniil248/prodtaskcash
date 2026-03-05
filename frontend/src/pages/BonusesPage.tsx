@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { bonusesApi, tasksApi } from '../api/client'
+import { bonusesApi, tasksApi, profileApi } from '../api/client'
 import { useStore } from '../store'
 import { showToast } from '../components/Toast'
 import { calcLevel } from '../utils/level'
@@ -226,7 +226,7 @@ function ReferralIncomeChart({ data }: { data: ReferralIncomeDay[] }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function BonusesPage() {
   const navigate   = useNavigate()
-  const { bonuses, setBonuses, user, profile, tasks: storeTasks, setTasks } = useStore()
+  const { bonuses, setBonuses, user, profile, setProfile, setUser, tasks: storeTasks, setTasks } = useStore()
   const [loading, setLoading]   = useState(true)
   const [tab, setTab]           = useState<'daily' | 'referrals'>('daily')
   const [incomeHistory, setIncomeHistory] = useState<ReferralIncomeDay[]>([])
@@ -238,6 +238,8 @@ export default function BonusesPage() {
         ? tasksApi.list({ page: 1, page_size: 20 }).then(({ data }) => setTasks(data.tasks, data.completed_today))
         : Promise.resolve(),
       bonusesApi.incomeHistory().then(({ data }) => setIncomeHistory(data)).catch(() => {}),
+      // Fetch fresh profile to guarantee level is never stale
+      profileApi.get().then(({ data }) => { setProfile(data); setUser(data) }).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [])
 
