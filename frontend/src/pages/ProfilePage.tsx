@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { profileApi, withdrawalsApi, bonusesApi } from '../api/client'
+import { profileApi, withdrawalsApi, bonusesApi, settingsApi } from '../api/client'
 import { useStore } from '../store'
 import { showToast } from '../components/Toast'
 import { calcLevel, levelProgress, nextLevelAt } from '../utils/level'
@@ -139,6 +139,8 @@ export default function ProfilePage() {
   const [wRequisites, setWRequisites] = useState('')
   const [wLoading, setWLoading] = useState(false)
   const [completedCount, setCompletedCount] = useState(0)
+  const [minWithdrawal, setMinWithdrawal] = useState(10)
+  const [feePercent, setFeePercent] = useState(5)
 
   const navigate = useNavigate()
   const loadTransactions = useCallback(async (p: number, typeFilter: TransactionType | '', append = false) => {
@@ -168,6 +170,16 @@ export default function ProfilePage() {
       setCompletedCount(ct.data.total)
       setWithdrawals(wd.data)
     })
+    settingsApi.public().then(({ data }) => {
+      if (data.min_withdrawal) {
+        const v = parseFloat(data.min_withdrawal)
+        if (!isNaN(v)) setMinWithdrawal(v)
+      }
+      if (data.withdrawal_fee_percent) {
+        const v = parseFloat(data.withdrawal_fee_percent)
+        if (!isNaN(v)) setFeePercent(v)
+      }
+    }).catch(() => {})
     loadTransactions(1, '')
   }, [])
 
@@ -180,6 +192,8 @@ export default function ProfilePage() {
   const handleWithdraw = async () => {
     const amount = parseFloat(wAmount)
     if (!amount || amount <= 0) return showToast('Введите сумму', 'error')
+    if (amount < minWithdrawal) return showToast(`Минимальная сумма вывода: ${minWithdrawal}₽`, 'error')
+    if (amount > balance) return showToast('Недостаточно средств на балансе', 'error')
     if (!wRequisites.trim()) return showToast('Введите реквизиты', 'error')
     setWLoading(true)
     try {
@@ -229,7 +243,9 @@ export default function ProfilePage() {
             <Avatar
               photoUrl={
                 user?.photo_url ??
-                (typeof window !== 'undefined' && (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: { user?: { photo_url?: string } } } } }).Telegram?.WebApp?.initDataUnsafe?.user?.photo_url) ??
+                (typeof window !== 'undefined'
+                  ? (window as unknown as { Telegram?: { WebApp?: { initDataUnsafe?: { user?: { photo_url?: string } } } } }).Telegram?.WebApp?.initDataUnsafe?.user?.photo_url
+                  : null) ??
                 null
               }
               firstName={user?.first_name || 'U'}
@@ -610,7 +626,16 @@ export default function ProfilePage() {
                 <span style={{ fontSize: 12, color: C.sub }}>Автоматически. Без оператора</span>
               </div>
             </div>
-            <p style={{ marginBottom: 14, fontSize: 12, color: C.sub }}>Комиссия: 5% · Мин. 500₽</p>
+            <div style={{ marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <p style={{ fontSize: 12, color: C.sub }}>
+                Комиссия: {feePercent}% · Мин. {minWithdrawal}₽
+              </p>
+              {parseFloat(wAmount) >= minWithdrawal && (
+                <p style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>
+                  Вы получите: {(parseFloat(wAmount) * (1 - feePercent / 100)).toFixed(0)}₽
+                </p>
+              )}
+            </div>
             <button onClick={handleWithdraw} disabled={wLoading} style={{
               width: '100%', height: 50, borderRadius: 25, border: 'none',
               background: GRAD, color: C.white, fontWeight: 700, fontSize: 16,

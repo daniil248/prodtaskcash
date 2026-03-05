@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from 'react'
+import { useEffect, useCallback, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { tasksApi, settingsApi } from '../api/client'
 import { useStore } from '../store'
@@ -69,14 +69,7 @@ const STATUS_TABS: { key: StatusTab; label: string }[] = [
   { key: 'done',        label: 'Выполненные' },
 ]
 
-// Sort options (hidden button)
-const SORT_OPTIONS: { key: SortType; label: string }[] = [
-  { key: 'default',     label: 'По умолчанию' },
-  { key: 'reward_desc', label: '↓ Награда' },
-  { key: 'reward_asc',  label: '↑ Награда' },
-]
-
-const PAGE_SIZE = 50
+const PAGE_SIZE = 20
 
 // ─── Countdown hook ────────────────────────────────────────────────────────────
 function useCountdown(expiresAt: string | null) {
@@ -191,7 +184,7 @@ function TaskCardItem({ task, onClick }: { task: Task; onClick: () => void }) {
 }
 
 // ─── News banner card — from tasks.svg banner/timer layout ────────────────────
-function NewsBanner({ featuredTask, bannerBudget }: { featuredTask: Task | null; bannerBudget: string }) {
+function NewsBanner({ featuredTask, bannerBudget, bannerTitle }: { featuredTask: Task | null; bannerBudget: string; bannerTitle: string }) {
   const countdown = useCountdown(featuredTask?.expires_at ?? null)
   const navigate = useNavigate()
   return (
@@ -222,7 +215,7 @@ function NewsBanner({ featuredTask, bannerBudget }: { featuredTask: Task | null;
       </p>
       {/* Task title */}
       <p style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginTop: 6, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-        {featuredTask?.title || 'Название задания'}
+        {featuredTask?.title || bannerTitle}
       </p>
 
       {/* Timer pill — rect rx=16.5 white from tasks.svg timer group */}
@@ -247,21 +240,37 @@ export default function TasksPage() {
   const [tab, setTab] = useState<StatusTab>('new')
   const [sort, setSort] = useState<SortType>('default')
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
   const [onlineCount, setOnlineCount] = useState(0)
   const [bannerBudget, setBannerBudget] = useState<string>('3.000.000')
+  const [bannerTitle, setBannerTitle] = useState<string>('Новые задания уже ждут вас')
 
+  const allTasksRef = useRef<Task[]>([])
   const level = calcLevel(parseFloat(user?.total_earned ?? '0'))
 
-  const load = useCallback(async (s: SortType) => {
-    setLoading(true)
+  const load = useCallback(async (s: SortType, p: number) => {
+    if (p === 1) {
+      allTasksRef.current = []
+      setLoading(true)
+    } else {
+      setLoadingMore(true)
+    }
     try {
-      const { data } = await tasksApi.list({ sort: s, page: 1, page_size: PAGE_SIZE })
-      setLocalTasks(data.tasks)
-      setTasks(data.tasks, data.completed_today)
-    } finally { setLoading(false) }
+      const { data } = await tasksApi.list({ sort: s, page: p, page_size: PAGE_SIZE })
+      allTasksRef.current = p === 1 ? data.tasks : [...allTasksRef.current, ...data.tasks]
+      setLocalTasks([...allTasksRef.current])
+      setTasks([...allTasksRef.current], data.completed_today)
+      setPage(data.page)
+      setTotalPages(data.pages)
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+    }
   }, [setTasks])
 
-  useEffect(() => { load(sort) }, [sort, load])
+  useEffect(() => { load(sort, 1) }, [sort])
 
   useEffect(() => {
     settingsApi.public().then(({ data }) => {
@@ -269,6 +278,7 @@ export default function TasksPage() {
         const n = parseFloat(data.banner_budget)
         if (!isNaN(n)) setBannerBudget(n.toLocaleString('ru').replace(',', '.'))
       }
+      if (data.banner_title) setBannerTitle(data.banner_title)
     }).catch(() => {})
   }, [])
 
@@ -437,7 +447,7 @@ export default function TasksPage() {
             paddingBottom: 2,
             msOverflowStyle: 'none', scrollbarWidth: 'none',
           }}>
-            <NewsBanner featuredTask={featured} bannerBudget={bannerBudget} />
+            <NewsBanner featuredTask={featured} bannerBudget={bannerBudget} bannerTitle={bannerTitle} />
           </div>
         </div>
       )}
@@ -505,6 +515,22 @@ export default function TasksPage() {
                 onClick={() => navigate(`/tasks/${task.id}`)}
               />
             ))}
+            {page < totalPages && (
+              <div style={{ textAlign: 'center', padding: '8px 0 4px' }}>
+                <button
+                  onClick={() => load(sort, page + 1)}
+                  disabled={loadingMore}
+                  style={{
+                    padding: '9px 28px', borderRadius: 100,
+                    border: `1.5px solid ${ACCENT}`, background: 'none', color: ACCENT,
+                    fontWeight: 600, fontSize: 13, cursor: loadingMore ? 'default' : 'pointer',
+                    opacity: loadingMore ? 0.6 : 1,
+                  }}
+                >
+                  {loadingMore ? 'Загрузка...' : 'Загрузить ещё'}
+                </button>
+              </div>
+            )}
             <div style={{ height: 16 }}/>
           </>
         )}

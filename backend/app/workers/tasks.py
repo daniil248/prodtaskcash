@@ -77,12 +77,25 @@ async def _verify_task_async(user_task_id: int):
 
         elif task.task_type == TaskType.invite:
             from sqlalchemy import func
-            completed_referrals = await db.execute(
-                select(func.count(User.id)).where(User.referrer_id == user.id)
+            min_tasks = settings.REFERRAL_MIN_TASKS
+            completed_subq = (
+                select(func.count(UserTask.id))
+                .where(
+                    UserTask.user_id == User.id,
+                    UserTask.status == UserTaskStatus.completed,
+                )
+                .correlate(User)
+                .scalar_subquery()
             )
-            count = completed_referrals.scalar() or 0
+            active_ref_result = await db.execute(
+                select(func.count(User.id)).where(
+                    User.referrer_id == user.id,
+                    completed_subq >= min_tasks,
+                )
+            )
+            count = active_ref_result.scalar() or 0
             success = count > 0
-            message = "Реферал засчитан" if success else "Нет приглашённых пользователей"
+            message = "Реферал засчитан" if success else f"Реферал должен выполнить минимум {min_tasks} задания"
 
         if success:
             user_task.status = UserTaskStatus.completed

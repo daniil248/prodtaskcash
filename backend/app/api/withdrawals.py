@@ -7,7 +7,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import User, Withdrawal, WithdrawalStatus, Transaction, TransactionType
+from app.models import User, Withdrawal, WithdrawalStatus, Transaction, TransactionType, SystemSetting
 from app.schemas import WithdrawalRequest, WithdrawalSchema
 from app.api.deps import get_current_user
 from app.services.antifraid import check_user_allowed
@@ -15,6 +15,16 @@ from app.config import get_settings
 
 router = APIRouter(prefix="/withdrawals", tags=["withdrawals"])
 settings = get_settings()
+
+
+async def _get_sys_decimal(db: AsyncSession, key: str, default: float) -> Decimal:
+    row = (await db.execute(select(SystemSetting).where(SystemSetting.key == key))).scalar_one_or_none()
+    if row:
+        try:
+            return Decimal(row.value)
+        except Exception:
+            pass
+    return Decimal(str(default))
 
 ALLOWED_METHODS = {"card", "sbp"}
 
@@ -76,11 +86,11 @@ async def create_withdrawal(
     if not allowed:
         raise HTTPException(status_code=403, detail=msg)
 
-    min_amount = Decimal(str(settings.MIN_WITHDRAWAL))
+    min_amount = await _get_sys_decimal(db, "min_withdrawal", settings.MIN_WITHDRAWAL)
     if body.amount < min_amount:
         raise HTTPException(status_code=400, detail=f"Минимальная сумма вывода: {min_amount:.0f}₽")
 
-    base_max = Decimal(str(settings.MAX_WITHDRAWAL_DAY))
+    base_max = await _get_sys_decimal(db, "max_withdrawal_day", settings.MAX_WITHDRAWAL_DAY)
     effective_max = _trust_max_withdrawal(user.trust_score, base_max)
     if body.amount > effective_max:
         raise HTTPException(
@@ -111,7 +121,7 @@ async def create_withdrawal(
         )
     )
     weekly_total = weekly_result.scalar() or Decimal("0")
-    weekly_max = Decimal(str(settings.MAX_WITHDRAWAL_WEEK))
+    weekly_max = await _get_sys_decimal(db, "max_withdrawal_week", settings.MAX_WITHDRAWAL_WEEK)
     if weekly_total + body.amount > weekly_max:
         raise HTTPException(
             status_code=400,
@@ -131,7 +141,7 @@ async def create_withdrawal(
     if (active_result.scalar() or 0) >= 3:
         raise HTTPException(status_code=400, detail="Не более 3 активных заявок одновременно")
 
-    fee_pct = Decimal(str(settings.WITHDRAWAL_FEE_PERCENT)) / 100
+    fee_pct = await _get_sys_decimal(db, "withdrawal_fee_percent", settings.WITHDRAWAL_FEE_PERCENT) / 100
     fee = (body.amount * fee_pct).quantize(Decimal("0.01"))
 
     user.balance -= body.amount
