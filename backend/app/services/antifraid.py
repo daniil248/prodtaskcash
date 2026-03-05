@@ -8,15 +8,17 @@ from app.models import User, UserTask, UserTaskStatus, Transaction, TransactionT
 logger = logging.getLogger(__name__)
 
 TRUST_THRESHOLDS = {
-    "soft_block": 20,
-    "warn": 35,
+    # Auto-ban only when clearly fraudulent (multiple confirmed violations)
+    "soft_block": 10,
+    "warn": 25,
 }
 
 SCORE_PENALTIES = {
-    "fast_completion": -10,
-    "vpn_proxy": -15,
-    "suspicious_pattern": -20,
-    "device_duplicate": -30,
+    "fast_completion": -5,
+    "vpn_proxy": -10,
+    "suspicious_pattern": -15,
+    # Fingerprint of another account — significant but not instant ban
+    "device_duplicate": -20,
 }
 
 SCORE_BONUSES = {

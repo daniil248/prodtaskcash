@@ -73,7 +73,7 @@ async def telegram_auth(
 
         initial_trust = 50
 
-        # Дубль fingerprint → автоматически снижаем начальный trust score
+        # Дубль fingerprint → слегка снижаем начальный trust, но не до порога бана
         if fp:
             is_dup = await check_device_duplicate(db, fp, telegram_id)
             if is_dup:
@@ -81,7 +81,8 @@ async def telegram_auth(
                     "Duplicate fingerprint at registration: telegram_id=%s fp=%s",
                     telegram_id, fp,
                 )
-                initial_trust = max(10, initial_trust + SCORE_PENALTIES["device_duplicate"])
+                # Снижаем до 35 (далеко выше порога авто-бана = 10)
+                initial_trust = max(35, initial_trust + SCORE_PENALTIES["device_duplicate"])
 
         user = User(
             telegram_id=telegram_id,
@@ -111,26 +112,18 @@ async def telegram_auth(
         if tg_user.get("photo_url"):
             user.photo_url = tg_user.get("photo_url")
 
-        # Обновляем fingerprint если появился новый, или проверяем на дубль
-        if fp:
-            if not user.device_fingerprint:
-                # Первый раз появился fingerprint — проверяем
-                is_dup = await check_device_duplicate(db, fp, telegram_id)
-                if is_dup:
-                    logger.warning(
-                        "Duplicate fingerprint on existing user: telegram_id=%s fp=%s",
-                        telegram_id, fp,
-                    )
-                    await update_trust_score(db, user, SCORE_PENALTIES["device_duplicate"])
-                user.device_fingerprint = fp
-            elif user.device_fingerprint != fp:
-                # Fingerprint сменился — подозрительно
+        # Проверяем fingerprint: штраф только если он принадлежит ДРУГОМУ пользователю.
+        # Смена устройства (телефон↔ПК) — нормальное поведение, штрафовать нельзя.
+        if fp and fp != user.device_fingerprint:
+            is_dup = await check_device_duplicate(db, fp, telegram_id)
+            if is_dup:
                 logger.warning(
-                    "Fingerprint changed: telegram_id=%s old=%s new=%s",
-                    telegram_id, user.device_fingerprint, fp,
+                    "Fingerprint belongs to another user: telegram_id=%s fp=%s",
+                    telegram_id, fp,
                 )
                 await update_trust_score(db, user, SCORE_PENALTIES["device_duplicate"] // 2)
-                user.device_fingerprint = fp
+            # Всегда обновляем до последнего известного устройства
+            user.device_fingerprint = fp
 
         await db.commit()
 

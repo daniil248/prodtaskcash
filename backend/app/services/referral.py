@@ -8,7 +8,9 @@ settings = get_settings()
 
 
 def make_referral_link(telegram_id: int) -> str:
-    return f"https://t.me/{settings.BOT_USERNAME}?start={telegram_id}"
+    # startapp= opens the Mini App directly and sets initDataUnsafe.start_param.
+    # ?start= only sends /start to the bot which must then re-open the app.
+    return f"https://t.me/{settings.BOT_USERNAME}?startapp={telegram_id}"
 
 
 async def get_referral_stats(db: AsyncSession, user: User) -> dict:
