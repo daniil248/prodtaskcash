@@ -44,7 +44,6 @@ export default function SplashPage() {
 
     const initData = tg?.initData || ''
 
-    // Not in Telegram — show open-in-bot message
     if (!initData) {
       setError(true)
       return
@@ -59,20 +58,12 @@ export default function SplashPage() {
         setAuth(data.access_token, { ...data.user, photo_url: photoUrl })
         navigate('/tasks', { replace: true })
       } catch {
-        // If token already exists, don't block — just navigate
         if (token) navigate('/tasks', { replace: true })
         else setError(true)
       }
     }
 
-    // Always call auth to refresh user data (total_earned, balance, etc.)
-    // If token exists — navigate immediately and refresh in background
-    if (token) {
-      navigate('/tasks', { replace: true })
-      init().catch(() => {})
-    } else {
-      init()
-    }
+    init()
   }, [])
 
   const logoBlock = (

@@ -30,7 +30,6 @@ export const useStore = create<AppState>()(
       bonuses: null,
 
       setAuth: (token, user) => set({ token, user }),
-      // Updates user fields (e.g. fresh total_earned) without changing token
       setUser: (user) => set({ user }),
       setProfile: (profile) => set({ profile }),
       setTasks: (tasks, completedToday) => set({ tasks, completedToday }),
