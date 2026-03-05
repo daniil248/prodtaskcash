@@ -12,8 +12,6 @@ const ACCENT = '#23C366'
 
 // ── Level badge — exact paths from profile.svg / bonuses.svg ─────────────────
 // calcLevel imported from utils/level
-  return 1
-}
 function LevelBadge({ level }: { level: number }) {
   return (
     <div style={{ position: 'relative', width: 44, height: 44, flexShrink: 0 }}>
