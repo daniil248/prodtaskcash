@@ -84,8 +84,6 @@ const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 const DAILY_MAX = 5
 
 // calcLevel is imported from utils/level
-  return 1
-}
 
 // Tab definitions matching SVG: Новые / В процессе / Выполненные
 type StatusTab = 'new' | 'in_progress' | 'done'
