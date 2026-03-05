@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useStore } from './store'
+import { profileApi } from './api/client'
 import SplashPage from './pages/SplashPage'
 import TasksPage from './pages/TasksPage'
 import TaskDetailPage from './pages/TaskDetailPage'
@@ -27,10 +28,29 @@ export default function App() {
     if (tg) {
       tg.ready()
       tg.expand()
-      // requestFullscreen available in newer Telegram versions
       const tgAny = tg as unknown as { requestFullscreen?: () => void }
       tgAny.requestFullscreen?.()
     }
+  }, [])
+
+  useEffect(() => {
+    const refresh = () => {
+      if (!useStore.getState().token) return
+      profileApi.get().then(({ data }) => {
+        useStore.getState().setUser(data)
+        useStore.getState().setProfile(data)
+      }).catch(() => {})
+    }
+
+    const tg = window.Telegram?.WebApp
+    if (tg) {
+      tg.onEvent('activated', refresh)
+      return () => tg.offEvent('activated', refresh)
+    }
+
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
   }, [])
 
   return (
