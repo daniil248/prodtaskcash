@@ -38,8 +38,8 @@ class UserSchema(BaseModel):
 
 
 class ProfileSchema(UserSchema):
-    completed_today: int
-    referrals_count: int
+    completed_today: int = 0
+    referrals_count: int = 0
 
 
 # ── Tasks ─────────────────────────────────────────────────────────────────────
