@@ -64,6 +64,7 @@ class TaskSchema(BaseModel):
     total_completions: int = 0
     sort_order: int = 0
     is_active: bool = True
+    is_vip: bool = False
     expires_at: datetime | None
     created_at: datetime | None = None
     # These are set per-request (not from DB directly)
@@ -182,6 +183,7 @@ class TaskCreateRequest(BaseModel):
     total_user_limit: int = 1
     max_completions: int | None = None
     sort_order: int = 0
+    is_vip: bool = False
     expires_at: datetime | None = None
 
 

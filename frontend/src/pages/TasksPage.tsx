@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { tasksApi } from '../api/client'
+import { tasksApi, settingsApi } from '../api/client'
 import { useStore } from '../store'
 import type { Task, SortType } from '../types'
 
@@ -135,7 +135,7 @@ function TaskCardItem({ task, onClick }: { task: Task; onClick: () => void }) {
   const isChecking = task.user_status === 'checking'
   const isProgress = task.user_status === 'in_progress'
   const countdown  = useCountdown(task.expires_at)
-  const isVip      = parseFloat(task.reward) >= 200
+  const isVip      = task.is_vip === true
 
   return (
     <div
@@ -220,7 +220,7 @@ function TaskCardItem({ task, onClick }: { task: Task; onClick: () => void }) {
 }
 
 // ─── News banner card — from tasks.svg banner/timer layout ────────────────────
-function NewsBanner({ featuredTask }: { featuredTask: Task | null }) {
+function NewsBanner({ featuredTask, bannerBudget }: { featuredTask: Task | null; bannerBudget: string }) {
   const countdown = useCountdown(featuredTask?.expires_at ?? null)
   const navigate = useNavigate()
   return (
@@ -245,9 +245,9 @@ function NewsBanner({ featuredTask }: { featuredTask: Task | null }) {
       <div style={{ position: 'absolute', right: -20, top: -20, width: 120, height: 120, borderRadius: '50%', background: 'rgba(255,255,255,0.06)' }}/>
       <div style={{ position: 'absolute', right: 20, bottom: -30, width: 80, height: 80, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }}/>
 
-      {/* Бюджет label */}
+      {/* Бюджет label — dynamic from admin settings */}
       <p style={{ fontSize: 13, fontWeight: 800, color: '#FFD700', letterSpacing: 0.3, textTransform: 'uppercase' }}>
-        БЮДЖЕТ 3.000.000 Р
+        БЮДЖЕТ {bannerBudget} Р
       </p>
       {/* Task title */}
       <p style={{ fontSize: 16, fontWeight: 700, color: '#fff', marginTop: 6, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
@@ -277,6 +277,7 @@ export default function TasksPage() {
   const [sort, setSort] = useState<SortType>('default')
   const [loading, setLoading] = useState(true)
   const [onlineCount] = useState(Math.floor(Math.random() * 3000) + 8000)
+  const [bannerBudget, setBannerBudget] = useState<string>('3.000.000')
 
   const level = calcLevel(parseFloat(user?.total_earned || '0'))
 
@@ -290,6 +291,15 @@ export default function TasksPage() {
   }, [setTasks])
 
   useEffect(() => { load(sort) }, [sort, load])
+
+  useEffect(() => {
+    settingsApi.public().then(({ data }) => {
+      if (data.banner_budget) {
+        const n = parseFloat(data.banner_budget)
+        if (!isNaN(n)) setBannerBudget(n.toLocaleString('ru').replace(',', '.'))
+      }
+    }).catch(() => {})
+  }, [])
 
   // Filter by status tab
   const filtered = tasks.filter((t) => {
@@ -445,7 +455,7 @@ export default function TasksPage() {
             paddingBottom: 2,
             msOverflowStyle: 'none', scrollbarWidth: 'none',
           }}>
-            <NewsBanner featuredTask={featured} />
+            <NewsBanner featuredTask={featured} bannerBudget={bannerBudget} />
           </div>
         </div>
       )}

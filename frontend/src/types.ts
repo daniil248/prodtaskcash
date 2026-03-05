@@ -36,10 +36,16 @@ export interface Task {
   duration_seconds: number | null
   max_completions: number | null
   total_completions: number | null
+  is_vip: boolean
   user_status: UserTaskStatus | null
   user_task_id: number | null
   error_message?: string | null
   expires_at: string | null
+}
+
+export interface ReferralIncomeDay {
+  date: string
+  amount: number
 }
 
 export interface Referral {

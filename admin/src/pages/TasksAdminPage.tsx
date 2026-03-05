@@ -19,6 +19,7 @@ interface Task {
   total_completions: number
   sort_order: number
   is_active: boolean
+  is_vip: boolean
   expires_at: string | null
   created_at: string | null
 }
@@ -39,6 +40,7 @@ const EMPTY_FORM: Omit<Task, 'id' | 'total_completions' | 'created_at'> = {
   max_completions: null,
   sort_order: 0,
   is_active: true,
+  is_vip: false,
   expires_at: null,
 }
 
@@ -117,6 +119,7 @@ export default function TasksAdminPage() {
       max_completions:  t.max_completions,
       sort_order:       t.sort_order,
       is_active:        t.is_active,
+      is_vip:           t.is_vip ?? false,
       expires_at:       t.expires_at,
     })
     setError('')
@@ -146,6 +149,7 @@ export default function TasksAdminPage() {
         max_completions:  form.max_completions ? parseInt(String(form.max_completions)) : null,
         sort_order:       parseInt(String(form.sort_order)) || 0,
         is_active:        form.is_active,
+        is_vip:           form.is_vip,
         expires_at:       form.expires_at || null,
       }
       if (editing) {
@@ -231,14 +235,19 @@ export default function TasksAdminPage() {
                   </td>
                   <td className="text-sm">{formatDate(t.expires_at)}</td>
                   <td>
-                    <span
-                      className={`badge ${t.is_active ? 'badge-green' : 'badge-gray'}`}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => toggleActive(t)}
-                      title="Нажмите для переключения"
-                    >
-                      {t.is_active ? 'Активно' : 'Выключено'}
-                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span
+                        className={`badge ${t.is_active ? 'badge-green' : 'badge-gray'}`}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => toggleActive(t)}
+                        title="Нажмите для переключения"
+                      >
+                        {t.is_active ? 'Активно' : 'Выключено'}
+                      </span>
+                      {t.is_vip && (
+                        <span className="badge" style={{ background: '#FE5A5B', color: '#fff' }}>VIP</span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     <div className="flex gap-8">
@@ -540,6 +549,21 @@ export default function TasksAdminPage() {
                   style={{ width: 'auto', margin: 0 }}
                 />
                 <span className="form-label" style={{ marginBottom: 0 }}>Задание активно (видно пользователям)</span>
+              </label>
+            </div>
+
+            {/* VIP toggle */}
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={form.is_vip}
+                  onChange={(e) => setForm({ ...form, is_vip: e.target.checked })}
+                  style={{ width: 'auto', margin: 0 }}
+                />
+                <span className="form-label" style={{ marginBottom: 0 }}>
+                  🔴 VIP задание (показывать красный VIP-значок на карточке)
+                </span>
               </label>
             </div>
 

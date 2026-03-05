@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { bonusesApi, tasksApi } from '../api/client'
 import { useStore } from '../store'
 import { showToast } from '../components/Toast'
-import type { Referral, Task } from '../types'
+import type { Referral, Task, ReferralIncomeDay } from '../types'
 
 // ── Brand constants ────────────────────────────────────────────────────────────
 const GRAD   = 'linear-gradient(135deg, #35DE66 43%, #2CE1A1 58%, #02BBC7 100%)'
@@ -177,12 +177,63 @@ function DailyTaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
   )
 }
 
+// ── Simple SVG bar chart for referral income ──────────────────────────────────
+function ReferralIncomeChart({ data }: { data: ReferralIncomeDay[] }) {
+  const maxVal = Math.max(...data.map(d => d.amount), 0.01)
+  const barW = 16
+  const gap = 4
+  const chartH = 60
+  const totalW = data.length * (barW + gap) - gap
+
+  const monthNames = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек']
+
+  return (
+    <div style={{ padding: '0 16px', marginTop: 8 }}>
+      <div style={{ background: '#fff', borderRadius: 12, padding: '14px 16px 10px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+        <p style={{ fontSize: 12, fontWeight: 700, color: '#4D536D', marginBottom: 10, letterSpacing: 0.3 }}>
+          ДОХОД ОТ РЕФЕРАЛОВ · 14 ДНЕЙ
+        </p>
+        <svg width="100%" viewBox={`0 0 ${totalW} ${chartH + 18}`} preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+          {data.map((d, i) => {
+            const barH = Math.max(2, (d.amount / maxVal) * chartH)
+            const x = i * (barW + gap)
+            const y = chartH - barH
+            const hasIncome = d.amount > 0
+            const date = new Date(d.date)
+            const showLabel = i === 0 || i === data.length - 1 || date.getDate() === 1
+            return (
+              <g key={d.date}>
+                <rect
+                  x={x} y={y} width={barW} height={barH}
+                  rx={3}
+                  fill={hasIncome ? '#23C366' : '#EEECF9'}
+                />
+                {hasIncome && (
+                  <text x={x + barW / 2} y={y - 3} textAnchor="middle" fontSize={8} fill="#23C366" fontWeight={700}>
+                    {d.amount.toFixed(0)}
+                  </text>
+                )}
+                {showLabel && (
+                  <text x={x + barW / 2} y={chartH + 14} textAnchor="middle" fontSize={8} fill="#9B9FB0">
+                    {date.getDate()} {monthNames[date.getMonth()]}
+                  </text>
+                )}
+              </g>
+            )
+          })}
+        </svg>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function BonusesPage() {
   const navigate   = useNavigate()
   const { bonuses, setBonuses, user, tasks: storeTasks, setTasks } = useStore()
   const [loading, setLoading]   = useState(true)
   const [tab, setTab]           = useState<'daily' | 'referrals'>('daily')
+  const [incomeHistory, setIncomeHistory] = useState<ReferralIncomeDay[]>([])
 
   useEffect(() => {
     Promise.all([
@@ -190,6 +241,7 @@ export default function BonusesPage() {
       storeTasks.length === 0
         ? tasksApi.list({ page: 1, page_size: 20 }).then(({ data }) => setTasks(data.tasks, data.completed_today))
         : Promise.resolve(),
+      bonusesApi.incomeHistory().then(({ data }) => setIncomeHistory(data)).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [])
 
@@ -362,6 +414,11 @@ export default function BonusesPage() {
               </div>
             </div>
 
+            {/* Referral income chart */}
+            {incomeHistory.length > 0 && incomeHistory.some(d => d.amount > 0) && (
+              <ReferralIncomeChart data={incomeHistory} />
+            )}
+
             {/* "Данные обновляются раз в 10 минут" */}
             <p style={{ fontSize: 11, color: '#9B9FB0', textAlign: 'center', padding: '6px 16px 0' }}>
               Данные обновляются раз в 10 минут
@@ -453,16 +510,26 @@ export default function BonusesPage() {
                       }}>
                         {i + 1}
                       </div>
-                      {/* Avatar — gray circle (D9D9D9 fill from SVG) */}
-                      <div style={{
-                        width: 36, height: 36, borderRadius: 18, flexShrink: 0,
-                        background: '#D9D9D9',
-                      }}/>
-                      {/* Name */}
-                      <p style={{ flex: 1, fontSize: 14, fontWeight: 600, color: '#02020E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {ref.first_name}
-                        {ref.username && <span style={{ fontWeight: 400, color: '#9B9FB0', fontSize: 12 }}> @{ref.username}</span>}
-                      </p>
+                      {/* Avatar — gray circle (D9D9D9 fill from SVG) with active dot */}
+                      <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 18, background: '#D9D9D9' }}/>
+                        <div style={{
+                          position: 'absolute', bottom: 0, right: 0,
+                          width: 10, height: 10, borderRadius: 5,
+                          background: ref.is_active ? ACCENT : '#9B9FB0',
+                          border: '1.5px solid #fff',
+                        }}/>
+                      </div>
+                      {/* Name + status */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: '#02020E', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {ref.first_name}
+                          {ref.username && <span style={{ fontWeight: 400, color: '#9B9FB0', fontSize: 12 }}> @{ref.username}</span>}
+                        </p>
+                        <p style={{ fontSize: 11, color: ref.is_active ? ACCENT : '#9B9FB0', marginTop: 1 }}>
+                          {ref.is_active ? 'Активен' : 'Не активен'}
+                        </p>
+                      </div>
                       {/* Earned */}
                       <span style={{ fontSize: 14, fontWeight: 700, color: ACCENT, whiteSpace: 'nowrap', flexShrink: 0 }}>
                         +{parseFloat(String(ref.earned_from)).toFixed(0)} ₽

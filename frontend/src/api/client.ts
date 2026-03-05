@@ -48,6 +48,11 @@ export const profileApi = {
 
 export const bonusesApi = {
   get: () => api.get('/bonuses'),
+  incomeHistory: () => api.get('/bonuses/income-history'),
+}
+
+export const settingsApi = {
+  public: () => api.get('/settings/public'),
 }
 
 export const withdrawalsApi = {
