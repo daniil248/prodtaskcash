@@ -276,7 +276,7 @@ export default function TasksPage() {
   const [tab, setTab] = useState<StatusTab>('new')
   const [sort, setSort] = useState<SortType>('default')
   const [loading, setLoading] = useState(true)
-  const [onlineCount] = useState(Math.floor(Math.random() * 3000) + 8000)
+  const [onlineCount, setOnlineCount] = useState(0)
   const [bannerBudget, setBannerBudget] = useState<string>('3.000.000')
 
   const level = calcLevel(parseFloat(user?.total_earned || '0'))
@@ -299,6 +299,17 @@ export default function TasksPage() {
         if (!isNaN(n)) setBannerBudget(n.toLocaleString('ru').replace(',', '.'))
       }
     }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const fetchOnline = () => {
+      settingsApi.online().then(({ data }) => {
+        if (data.online != null) setOnlineCount(data.online)
+      }).catch(() => {})
+    }
+    fetchOnline()
+    const id = setInterval(fetchOnline, 60_000)
+    return () => clearInterval(id)
   }, [])
 
   // Filter by status tab

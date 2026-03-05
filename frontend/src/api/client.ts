@@ -53,6 +53,7 @@ export const bonusesApi = {
 
 export const settingsApi = {
   public: () => api.get('/settings/public'),
+  online: () => api.get('/settings/online'),
 }
 
 export const withdrawalsApi = {
