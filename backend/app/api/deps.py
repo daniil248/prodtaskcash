@@ -37,6 +37,7 @@ async def get_current_user(
             update(User).where(User.id == user.id).values(last_active_at=now)
         )
         await db.commit()
+        await db.refresh(user)
 
     return user
 
