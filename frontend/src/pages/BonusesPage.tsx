@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { bonusesApi, tasksApi } from '../api/client'
 import { useStore } from '../store'
 import { showToast } from '../components/Toast'
+import { calcLevel } from '../utils/level'
 import type { Referral, Task, ReferralIncomeDay } from '../types'
 
 // ── Brand constants ────────────────────────────────────────────────────────────
@@ -10,10 +11,7 @@ const GRAD   = 'linear-gradient(135deg, #35DE66 43%, #2CE1A1 58%, #02BBC7 100%)'
 const ACCENT = '#23C366'
 
 // ── Level badge — exact paths from profile.svg / bonuses.svg ─────────────────
-const LEVEL_THRESHOLDS = [0, 500, 2000, 5000, 10000, 99999]
-function calcLevel(e: number) {
-  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--)
-    if (e >= LEVEL_THRESHOLDS[i]) return i + 1
+// calcLevel imported from utils/level
   return 1
 }
 function LevelBadge({ level }: { level: number }) {
@@ -230,7 +228,7 @@ function ReferralIncomeChart({ data }: { data: ReferralIncomeDay[] }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function BonusesPage() {
   const navigate   = useNavigate()
-  const { bonuses, setBonuses, user, tasks: storeTasks, setTasks } = useStore()
+  const { bonuses, setBonuses, user, profile, tasks: storeTasks, setTasks } = useStore()
   const [loading, setLoading]   = useState(true)
   const [tab, setTab]           = useState<'daily' | 'referrals'>('daily')
   const [incomeHistory, setIncomeHistory] = useState<ReferralIncomeDay[]>([])
@@ -261,7 +259,9 @@ export default function BonusesPage() {
 
   if (loading) return <div className="loader"><div className="spinner" /></div>
 
-  const level       = calcLevel(parseFloat(user?.total_earned || '0'))
+  // Prefer profile (freshly fetched) over user (persisted cache) for level
+  const earned = parseFloat(profile?.total_earned ?? user?.total_earned ?? '0')
+  const level       = calcLevel(earned)
   const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Пользователь'
   const refsCount   = bonuses?.referrals_count ?? 0
   const totalEarned = parseFloat(String(bonuses?.total_from_referrals || '0'))

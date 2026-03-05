@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { tasksApi, settingsApi } from '../api/client'
 import { useStore } from '../store'
+import { calcLevel } from '../utils/level'
 import type { Task, SortType } from '../types'
 
 // ── Brand constants (from tasks.svg / components.svg) ─────────────────────────
@@ -82,10 +83,7 @@ const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 
 const DAILY_MAX = 5
 
-const LEVEL_THRESHOLDS = [0, 500, 2000, 5000, 10000, 99999]
-function calcLevel(earned: number) {
-  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--)
-    if (earned >= LEVEL_THRESHOLDS[i]) return i + 1
+// calcLevel is imported from utils/level
   return 1
 }
 
@@ -271,7 +269,7 @@ function NewsBanner({ featuredTask, bannerBudget }: { featuredTask: Task | null;
 // ─── Main page ─────────────────────────────────────────────────────────────────
 export default function TasksPage() {
   const navigate = useNavigate()
-  const { completedToday, setTasks, user } = useStore()
+  const { completedToday, setTasks, user, profile } = useStore()
   const [tasks, setLocalTasks] = useState<Task[]>([])
   const [tab, setTab] = useState<StatusTab>('new')
   const [sort, setSort] = useState<SortType>('default')
@@ -279,7 +277,9 @@ export default function TasksPage() {
   const [onlineCount, setOnlineCount] = useState(0)
   const [bannerBudget, setBannerBudget] = useState<string>('3.000.000')
 
-  const level = calcLevel(parseFloat(user?.total_earned || '0'))
+  // Prefer profile (freshly fetched) over user (persisted cache) for level
+  const earned = parseFloat(profile?.total_earned ?? user?.total_earned ?? '0')
+  const level = calcLevel(earned)
 
   const load = useCallback(async (s: SortType) => {
     setLoading(true)

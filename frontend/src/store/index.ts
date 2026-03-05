@@ -11,6 +11,7 @@ interface AppState {
   bonuses: Bonuses | null
 
   setAuth: (token: string, user: User) => void
+  setUser: (user: User) => void
   setProfile: (profile: Profile) => void
   setTasks: (tasks: Task[], completedToday: number) => void
   updateTask: (task: Task) => void
@@ -29,6 +30,8 @@ export const useStore = create<AppState>()(
       bonuses: null,
 
       setAuth: (token, user) => set({ token, user }),
+      // Updates user fields (e.g. fresh total_earned) without changing token
+      setUser: (user) => set({ user }),
       setProfile: (profile) => set({ profile }),
       setTasks: (tasks, completedToday) => set({ tasks, completedToday }),
       updateTask: (task) =>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { profileApi, withdrawalsApi, bonusesApi } from '../api/client'
 import { useStore } from '../store'
 import { showToast } from '../components/Toast'
+import { calcLevel, levelProgress, nextLevelAt } from '../utils/level'
 import type { Transaction, TransactionType, Bonuses, Withdrawal } from '../types'
 
 // ── exact SVG colors ──────────────────────────────────────────────
@@ -28,22 +29,7 @@ const METHODS = [
 ]
 
 const PAGE_SIZE = 20
-const LEVEL_THRESHOLDS = [0, 500, 2000, 5000, 10000, 99999]
-
-function calcLevel(earned: number) {
-  for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
-    if (earned >= LEVEL_THRESHOLDS[i]) return i + 1
-  }
-  return 1
-}
-
-function levelProgress(earned: number) {
-  const lvl = calcLevel(earned)
-  const from = LEVEL_THRESHOLDS[lvl - 1] ?? 0
-  const to = LEVEL_THRESHOLDS[lvl] ?? LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1]
-  if (to === from) return 100
-  return Math.min(100, ((earned - from) / (to - from)) * 100)
-}
+// calcLevel, levelProgress, nextLevelAt, LEVEL_THRESHOLDS — imported from utils/level
 
 // ── LVL Badge — EXACT paths from profile.svg (star hexagon + inner gear icon + corner triangles) ──
 function LevelBadge({ level }: { level: number }) {
@@ -196,7 +182,7 @@ const TX_FILTERS: { key: TransactionType | ''; label: string }[] = [
 ]
 
 export default function ProfilePage() {
-  const { profile, setProfile, user } = useStore()
+  const { profile, setProfile, setUser, user } = useStore()
   const [bonuses, setBonuses] = useState<Bonuses | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
@@ -237,6 +223,9 @@ export default function ProfilePage() {
       withdrawalsApi.list(),
     ]).then(([p, b, ct, wd]) => {
       setProfile(p.data)
+      // Sync fresh user fields (total_earned, balance, etc.) into persisted store
+      // so TasksPage/BonusesPage show the same level
+      setUser(p.data)
       setBonuses(b.data)
       setCompletedCount(ct.data.total)
       setWithdrawals(wd.data)
@@ -279,7 +268,7 @@ export default function ProfilePage() {
   const balancePending = parseFloat(p?.balance_pending || '0')
   const level = calcLevel(totalEarned)
   const progress = levelProgress(totalEarned)
-  const nextLevelAt = LEVEL_THRESHOLDS[level] ?? LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1]
+  const nextAt = nextLevelAt(totalEarned)
   const displayName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Пользователь'
   const refsCount = bonuses?.referrals_count ?? 0
   const activeMethod = METHODS.find((m) => m.id === wMethod)!
@@ -366,7 +355,7 @@ export default function ProfilePage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
             <span style={{ fontSize: 11, color: C.label }}>Уровень {level}</span>
             <span style={{ fontSize: 11, color: C.sub }}>
-              {totalEarned.toFixed(0)}₽ / {nextLevelAt}₽
+              {totalEarned.toFixed(0)}₽ / {nextAt}₽
             </span>
             <span style={{ fontSize: 11, color: C.label }}>Уровень {level + 1}</span>
           </div>
