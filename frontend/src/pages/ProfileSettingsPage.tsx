@@ -70,21 +70,28 @@ export default function ProfileSettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showLogoutModal, setShowLogoutModal] = useState(false)
 
+  const openLink = (url: string) => {
+    const tg = window.Telegram?.WebApp as { openTelegramLink?: (url: string) => void; openLink?: (url: string) => void } | undefined
+    if (tg?.openTelegramLink) tg.openTelegramLink(url)
+    else if (tg?.openLink) tg.openLink(url)
+    else window.open(url, '_blank')
+  }
+
   const items = [
     {
       icon: <SupportIcon />,
       label: 'Техническая поддержка',
-      onClick: () => alert('Поддержка: @taskcash_support'),
+      onClick: () => openLink('https://t.me/taskcash_support'),
     },
     {
       icon: <PrivacyIcon />,
       label: 'Политика конфиденциальности',
-      onClick: () => alert('Политика конфиденциальности — скоро'),
+      onClick: () => openLink('https://t.me/taskcash_support'),
     },
     {
       icon: <FileIcon />,
       label: 'Условия и положения',
-      onClick: () => alert('Условия использования — скоро'),
+      onClick: () => openLink('https://t.me/taskcash_support'),
     },
     {
       icon: <LogoutIcon />,

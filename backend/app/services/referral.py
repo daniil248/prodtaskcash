@@ -1,19 +1,29 @@
 from decimal import Decimal
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import User, Transaction, TransactionType, UserTask, UserTaskStatus
+from app.models import User, Transaction, TransactionType, UserTask, UserTaskStatus, SystemSetting
 from app.config import get_settings
 
 settings = get_settings()
 
 
 def make_referral_link(telegram_id: int) -> str:
-    # startapp= opens the Mini App directly and sets initDataUnsafe.start_param.
-    # ?start= only sends /start to the bot which must then re-open the app.
     return f"https://t.me/{settings.BOT_USERNAME}?startapp={telegram_id}"
 
 
+async def _get_sys_value(db: AsyncSession, key: str, default: float) -> float:
+    row = (await db.execute(select(SystemSetting).where(SystemSetting.key == key))).scalar_one_or_none()
+    if row:
+        try:
+            return float(row.value)
+        except Exception:
+            pass
+    return default
+
+
 async def get_referral_stats(db: AsyncSession, user: User) -> dict:
+    min_tasks = int(await _get_sys_value(db, "referral_min_tasks", settings.REFERRAL_MIN_TASKS))
+
     result = await db.execute(
         select(User).where(User.referrer_id == user.id)
     )
@@ -38,7 +48,7 @@ async def get_referral_stats(db: AsyncSession, user: User) -> dict:
             "telegram_id": ref.telegram_id,
             "first_name": ref.first_name,
             "username": ref.username,
-            "is_active": task_count >= settings.REFERRAL_MIN_TASKS,
+            "is_active": task_count >= min_tasks,
             "joined_at": ref.created_at,
             "earned_from": earned,
         })
@@ -66,6 +76,8 @@ async def try_give_referral_reward(db: AsyncSession, referral: User) -> None:
     if not referral.referrer_id or referral.referral_reward_given:
         return
 
+    min_tasks = int(await _get_sys_value(db, "referral_min_tasks", settings.REFERRAL_MIN_TASKS))
+
     completed = await db.execute(
         select(func.count(UserTask.id)).where(
             UserTask.user_id == referral.id,
@@ -74,7 +86,7 @@ async def try_give_referral_reward(db: AsyncSession, referral: User) -> None:
     )
     count = completed.scalar() or 0
 
-    if count < settings.REFERRAL_MIN_TASKS:
+    if count < min_tasks:
         return
 
     referrer_result = await db.execute(select(User).where(User.id == referral.referrer_id))
@@ -82,7 +94,7 @@ async def try_give_referral_reward(db: AsyncSession, referral: User) -> None:
     if not referrer or referrer.is_banned:
         return
 
-    reward = Decimal(str(settings.REFERRAL_REWARD))
+    reward = Decimal(str(await _get_sys_value(db, "referral_reward", settings.REFERRAL_REWARD)))
     referrer.balance += reward
     referrer.total_earned += reward
 

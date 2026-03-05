@@ -3,15 +3,24 @@ from datetime import datetime, timezone, timedelta, date
 from decimal import Decimal
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import User, UserTask, UserTaskStatus, Transaction, TransactionType
+from app.models import User, UserTask, UserTaskStatus, Transaction, TransactionType, SystemSetting
 
 logger = logging.getLogger(__name__)
 
 TRUST_THRESHOLDS = {
-    # Auto-ban only when clearly fraudulent (multiple confirmed violations)
     "soft_block": 10,
     "warn": 25,
 }
+
+
+async def _get_soft_block_threshold(db: AsyncSession) -> int:
+    row = (await db.execute(select(SystemSetting).where(SystemSetting.key == "trust_soft_block"))).scalar_one_or_none()
+    if row:
+        try:
+            return int(row.value)
+        except Exception:
+            pass
+    return TRUST_THRESHOLDS["soft_block"]
 
 SCORE_PENALTIES = {
     "fast_completion": -5,
@@ -27,10 +36,11 @@ SCORE_BONUSES = {
 }
 
 
-async def check_user_allowed(user: User) -> tuple[bool, str | None]:
+async def check_user_allowed(user: User, db: AsyncSession | None = None) -> tuple[bool, str | None]:
     if user.is_banned:
         return False, "Аккаунт заблокирован"
-    if user.trust_score < TRUST_THRESHOLDS["soft_block"]:
+    threshold = (await _get_soft_block_threshold(db)) if db else TRUST_THRESHOLDS["soft_block"]
+    if user.trust_score < threshold:
         return False, "Аккаунт временно ограничен"
     return True, None
 

@@ -39,7 +39,7 @@ async def list_tasks(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    allowed, msg = await check_user_allowed(user)
+    allowed, msg = await check_user_allowed(user, db)
     if not allowed:
         raise HTTPException(status_code=403, detail=msg)
 
@@ -117,7 +117,7 @@ async def start_task(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    allowed, msg = await check_user_allowed(user)
+    allowed, msg = await check_user_allowed(user, db)
     if not allowed:
         raise HTTPException(status_code=403, detail=msg)
 

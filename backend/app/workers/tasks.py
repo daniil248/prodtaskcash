@@ -77,7 +77,9 @@ async def _verify_task_async(user_task_id: int):
 
         elif task.task_type == TaskType.invite:
             from sqlalchemy import func
-            min_tasks = settings.REFERRAL_MIN_TASKS
+            from app.models import SystemSetting
+            _min_row = (await db.execute(select(SystemSetting).where(SystemSetting.key == "referral_min_tasks"))).scalar_one_or_none()
+            min_tasks = int(_min_row.value) if _min_row else settings.REFERRAL_MIN_TASKS
             completed_subq = (
                 select(func.count(UserTask.id))
                 .where(
