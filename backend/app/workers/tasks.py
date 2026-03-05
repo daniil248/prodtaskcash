@@ -92,6 +92,10 @@ async def _verify_task_async(user_task_id: int):
             user.total_earned += task.reward
             task.total_completions += 1
 
+            # Auto-deactivate task when budget is fully spent
+            if task.max_completions is not None and task.total_completions >= task.max_completions:
+                task.is_active = False
+
             db.add(Transaction(
                 user_id=user.id,
                 amount=task.reward,

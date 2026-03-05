@@ -48,6 +48,8 @@ async def list_tasks(
     base_filter = and_(
         Task.is_active == True,
         (Task.expires_at == None) | (Task.expires_at > now),
+        # Budget: hide tasks where total completions >= max_completions
+        (Task.max_completions == None) | (Task.total_completions < Task.max_completions),
     )
 
     # Итоговое количество
@@ -123,6 +125,13 @@ async def start_task(
     task = task_result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Задание не найдено")
+
+    # Budget exhausted?
+    if task.max_completions is not None and task.total_completions >= task.max_completions:
+        # Auto-deactivate when budget is gone
+        task.is_active = False
+        await db.commit()
+        raise HTTPException(status_code=400, detail="Бюджет задания исчерпан")
 
     can, reason = await can_start_task(db, user.id, task_id, task.daily_limit, task.total_user_limit)
     if not can:

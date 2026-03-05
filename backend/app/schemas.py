@@ -56,10 +56,20 @@ class TaskSchema(BaseModel):
     icon_url: str | None
     external_url: str | None
     channel_id: str | None
+    post_id: str | None = None
     duration_seconds: int | None
+    daily_limit: int = 1
+    total_user_limit: int = 1
+    max_completions: int | None = None
+    total_completions: int = 0
+    sort_order: int = 0
+    is_active: bool = True
+    expires_at: datetime | None
+    created_at: datetime | None = None
+    # These are set per-request (not from DB directly)
     user_status: UserTaskStatus | None = None
     user_task_id: int | None = None
-    expires_at: datetime | None
+    error_message: str | None = None
 
 
 class TaskListResponse(BaseModel):
