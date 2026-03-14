@@ -26,8 +26,11 @@ for name in frontend admin; do
   fi
 done
 
-# Docker (сначала docker-compose с дефисом — на сервере часто только он)
-docker-compose -f "$ROOT/production/docker-compose.yml" up -d --build 2>/dev/null || docker compose -f "$ROOT/production/docker-compose.yml" up -d --build
+# Docker — только docker-compose (дефис), не "docker compose"
+DC="docker-compose"
+[ -x /usr/bin/docker-compose ] && DC="/usr/bin/docker-compose"
+[ -x /usr/local/bin/docker-compose ] && DC="/usr/local/bin/docker-compose"
+$DC -f "$ROOT/production/docker-compose.yml" up -d --build
 
 # Ждём backend
 for i in $(seq 1 30); do
