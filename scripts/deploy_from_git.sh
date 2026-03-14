@@ -1,11 +1,18 @@
 #!/bin/bash
 # Запуск на сервере после git pull. Из корня репозитория: bash scripts/deploy_from_git.sh
-# Требует: .env в корне, docker, nginx, certbot (если ещё нет сертов).
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 echo "=== Deploy from git @ $ROOT ==="
+
+# nginx, certbot — ставим если нет
+command -v nginx >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y nginx)
+command -v certbot >/dev/null 2>&1 || (apt-get install -y certbot)
+mkdir -p /etc/nginx/sites-enabled
+# SSL — если нет сертификатов
+[ ! -d /etc/letsencrypt/live/user.taskcashbot.ru ] && (systemctl stop nginx 2>/dev/null || true; certbot certonly --standalone -d user.taskcashbot.ru -d admin.taskcashbot.ru --non-interactive --agree-tos -m admin@taskcashbot.ru 2>/dev/null || true; systemctl start nginx 2>/dev/null || true)
+ufw allow 80 2>/dev/null; ufw allow 443 2>/dev/null; ufw --force enable 2>/dev/null || true
 
 # Frontend/admin dist (если нет — собираем через node)
 for name in frontend admin; do
@@ -19,13 +26,8 @@ for name in frontend admin; do
   fi
 done
 
-# Docker
-export COMPOSE_FILE="$ROOT/production/docker-compose.yml"
-if [ -n "$(command -v docker-compose 2>/dev/null)" ]; then
-  docker-compose -f "$ROOT/production/docker-compose.yml" up -d --build
-else
-  docker compose -f "$ROOT/production/docker-compose.yml" up -d --build
-fi
+# Docker (сначала docker-compose с дефисом — на сервере часто только он)
+docker-compose -f "$ROOT/production/docker-compose.yml" up -d --build 2>/dev/null || docker compose -f "$ROOT/production/docker-compose.yml" up -d --build
 
 # Ждём backend
 for i in $(seq 1 30); do
