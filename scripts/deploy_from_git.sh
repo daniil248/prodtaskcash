@@ -87,11 +87,15 @@ cp -r "$ROOT/frontend/dist" /var/www/taskcash/frontend 2>/dev/null || true
 cp -r "$ROOT/admin/dist" /var/www/taskcash/admin 2>/dev/null || true
 chown -R www-data:www-data /var/www/taskcash 2>/dev/null || true
 
-# Конфиги nginx (production) — оба домена на один сертификат user.taskcashbot.ru
+# Конфиги nginx — удаляем старые, иначе conflicting server name
+rm -f /etc/nginx/sites-enabled/default \
+      /etc/nginx/sites-enabled/host-user.taskcashbot.ru.conf \
+      /etc/nginx/sites-enabled/host-admin.taskcashbot.ru.conf \
+      /etc/nginx/sites-enabled/user.taskcashbot.ru.conf \
+      /etc/nginx/sites-enabled/admin.taskcashbot.ru.conf
 for f in "$ROOT/production/nginx/"*.conf; do
   [ -f "$f" ] && cp "$f" /etc/nginx/sites-enabled/ && echo "Copied $(basename "$f")"
 done
-rm -f /etc/nginx/sites-enabled/default
 nginx -t && (nginx -s reload 2>/dev/null || systemctl reload nginx 2>/dev/null) || systemctl restart nginx 2>/dev/null || true
 
 echo "=== Deploy done ==="
