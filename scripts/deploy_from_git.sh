@@ -14,14 +14,14 @@ mkdir -p /etc/nginx/sites-enabled
 [ ! -d /etc/letsencrypt/live/user.taskcashbot.ru ] && (systemctl stop nginx 2>/dev/null || true; certbot certonly --standalone -d user.taskcashbot.ru -d admin.taskcashbot.ru --non-interactive --agree-tos -m admin@taskcashbot.ru 2>/dev/null || true; systemctl start nginx 2>/dev/null || true)
 ufw allow 80 2>/dev/null; ufw allow 443 2>/dev/null; ufw --force enable 2>/dev/null || true
 
-# Frontend/admin dist (если нет — собираем через node)
+# Frontend/admin dist (если нет — собираем; падение сборки не останавливает деплой)
 for name in frontend admin; do
   if [ ! -f "$ROOT/$name/dist/index.html" ]; then
     echo "Build $name..."
     if command -v npm >/dev/null 2>&1; then
-      (cd "$ROOT/$name" && npm ci --silent 2>/dev/null || npm install --silent && npm run build)
+      (cd "$ROOT/$name" && (npm ci --silent 2>/dev/null || npm install --silent) && npm run build) || true
     else
-      docker run --rm -v "$ROOT/$name:/app" -w /app node:20-alpine sh -c "npm install --silent && npm run build"
+      docker run --rm -v "$ROOT/$name:/app" -w /app node:20-alpine sh -c "npm install --silent && npm run build" || true
     fi
   fi
 done
