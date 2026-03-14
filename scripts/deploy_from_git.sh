@@ -26,6 +26,11 @@ for name in frontend admin; do
   fi
 done
 
+# .env обязателен для compose (POSTGRES_PASSWORD и др.)
+if [ ! -f "$ROOT/.env" ] || ! grep -q '^POSTGRES_PASSWORD=' "$ROOT/.env" 2>/dev/null; then
+  bash "$ROOT/scripts/create_env.sh"
+fi
+
 # Docker: DNS в контейнерах для запущенных контейнеров
 bash "$ROOT/scripts/ensure_docker_dns.sh" 2>/dev/null || true
 
@@ -41,7 +46,7 @@ docker build --network=host -t taskcash_admin_bot -f "$ROOT/bot/Dockerfile" "$RO
 DC="docker-compose"
 [ -x /usr/bin/docker-compose ] && DC="/usr/bin/docker-compose"
 [ -x /usr/local/bin/docker-compose ] && DC="/usr/local/bin/docker-compose"
-$DC -f "$ROOT/production/docker-compose.yml" up -d
+$DC --env-file "$ROOT/.env" -f "$ROOT/production/docker-compose.yml" up -d
 
 # Ждём backend
 for i in $(seq 1 30); do
@@ -53,7 +58,8 @@ for i in $(seq 1 30); do
 done
 
 # Миграции
-docker exec taskcash-backend-1 sh -c "cd /app && alembic upgrade head" 2>/dev/null || \
+docker exec production-backend-1 sh -c "cd /app && alembic upgrade head" 2>/dev/null || \
+  docker exec taskcash-backend-1 sh -c "cd /app && alembic upgrade head" 2>/dev/null || \
   docker exec taskcash_backend_1 sh -c "cd /app && alembic upgrade head" 2>/dev/null || true
 
 # Webhook сброс для ботов (long polling)
@@ -63,7 +69,9 @@ if [ -f "$ROOT/.env" ]; then
   [ -n "$BOT_TOKEN" ] && curl -s "https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook?drop_pending_updates=true" >/dev/null || true
   [ -n "$ADMIN_BOT_TOKEN" ] && curl -s "https://api.telegram.org/bot${ADMIN_BOT_TOKEN}/deleteWebhook?drop_pending_updates=true" >/dev/null || true
 fi
-docker restart taskcash-user_bot-1 taskcash-admin_bot-1 2>/dev/null || docker restart taskcash_user_bot_1 taskcash_admin_bot_1 2>/dev/null || true
+docker restart production-user_bot-1 production-admin_bot-1 2>/dev/null || \
+  docker restart taskcash-user_bot-1 taskcash-admin_bot-1 2>/dev/null || \
+  docker restart taskcash_user_bot_1 taskcash_admin_bot_1 2>/dev/null || true
 
 # Nginx: статика
 mkdir -p /var/www/taskcash
