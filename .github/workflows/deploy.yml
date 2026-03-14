@@ -9,9 +9,9 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.PROD_SSH_HOST }}
-          username: ${{ secrets.PROD_SSH_USER }}
-          password: ${{ secrets.PROD_SSH_PASS }}
+          host: 5.129.247.36
+          username: root
+          password: ${{ secrets.SSH_PASS_TASKCASH }}
           script: |
             set -e
             if [ ! -d /root/taskcash/.git ]; then
