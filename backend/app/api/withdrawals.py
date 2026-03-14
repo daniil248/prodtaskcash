@@ -28,28 +28,58 @@ async def _get_sys_decimal(db: AsyncSession, key: str, default: float) -> Decima
 
 ALLOWED_METHODS = {"card", "sbp"}
 
-_CARD_RE = re.compile(r"^\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}$")
-_PHONE_RE = re.compile(r"^[\+7|8][\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}$")
+
+def _normalize_phone(val: str) -> str | None:
+    """Из строки вида +7 (999) 123-45-67 или 89991234567 извлекает 11 цифр, начинающихся с 7."""
+    digits = re.sub(r"\D", "", val)
+    if not digits:
+        return None
+    if digits.startswith("8") and len(digits) == 11:
+        digits = "7" + digits[1:]
+    if digits.startswith("7") and len(digits) == 11:
+        return digits
+    if len(digits) == 10 and digits[0] in "89":
+        return "7" + digits
+    return None
 
 
-def _validate_requisites(method: str, requisites: str) -> tuple[bool, str]:
+def _luhn_checksum(digits: str) -> bool:
+    if len(digits) != 16 or not digits.isdigit():
+        return False
+    s = 0
+    for i, c in enumerate(reversed(digits)):
+        n = int(c)
+        if i % 2 == 1:
+            n *= 2
+            if n > 9:
+                n -= 9
+        s += n
+    return s % 10 == 0
+
+
+def _validate_requisites(method: str, requisites: str) -> tuple[bool, str, str]:
+    """Проверяет реквизиты. Возвращает (ok, error_message, normalized_requisites)."""
     m = method.lower()
     if m not in ALLOWED_METHODS:
-        return False, "Доступны только методы: На карту, Через СБП"
+        return False, "Доступны только методы: На карту, Через СБП", ""
 
     val = requisites.strip()
     if not val:
-        return False, "Укажите реквизиты"
+        return False, "Укажите реквизиты", ""
 
     if m == "card":
         digits = re.sub(r"[\s\-]", "", val)
         if not digits.isdigit() or len(digits) != 16:
-            return False, "Номер карты: 16 цифр"
+            return False, "Номер карты: 16 цифр", ""
+        # Не требуем Luhn — приём любых 16 цифр (проверка по Лuhну отключена, чтобы не блокировать реальные карты)
+        return True, "", digits
     elif m == "sbp":
-        if not _PHONE_RE.match(val):
-            return False, "Укажите номер телефона в формате +7XXXXXXXXXX"
+        normalized = _normalize_phone(val)
+        if not normalized:
+            return False, "Укажите номер телефона в формате +7 (999) 123-45-67 или 89991234567", ""
+        return True, "", "+7" + normalized[1:]  # +7XXXXXXXXXX
 
-    return True, ""
+    return True, "", val
 
 
 def _trust_max_withdrawal(trust_score: int, base_max: Decimal) -> Decimal:
@@ -128,7 +158,7 @@ async def create_withdrawal(
             detail=f"Недельный лимит: {weekly_max:.0f}₽. Использовано: {float(weekly_total):.0f}₽",
         )
 
-    ok, err = _validate_requisites(body.method, body.requisites)
+    ok, err, normalized_requisites = _validate_requisites(body.method, body.requisites)
     if not ok:
         raise HTTPException(status_code=400, detail=err)
 
@@ -148,12 +178,13 @@ async def create_withdrawal(
     user.balance_pending += body.amount
 
     method_label = "На карту" if body.method.lower() == "card" else "Через СБП"
+    requisites_to_store = normalized_requisites if normalized_requisites else body.requisites.strip()
     withdrawal = Withdrawal(
         user_id=user.id,
         amount=body.amount,
         fee=fee,
         method=body.method.lower(),
-        requisites=body.requisites.strip(),
+        requisites=requisites_to_store,
         status=WithdrawalStatus.created,
     )
     db.add(withdrawal)

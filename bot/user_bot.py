@@ -11,8 +11,9 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 load_dotenv()
 
-TOKEN = os.environ["USER_BOT_TOKEN"]
-MINI_APP_URL = os.environ["MINI_APP_URL"].rstrip("/")
+# Тот же бот, что и BOT_TOKEN в бэкенде: пользовательский бот (test_zadaniya_bot).
+TOKEN = os.environ.get("BOT_TOKEN") or os.environ.get("USER_BOT_TOKEN") or ""
+MINI_APP_URL = os.environ.get("MINI_APP_URL", "").rstrip("/")
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
@@ -120,6 +121,14 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 def main() -> None:
+    if not TOKEN or not MINI_APP_URL:
+        logger.error("Set BOT_TOKEN and MINI_APP_URL in .env")
+        raise SystemExit(1)
+    import urllib.request
+    try:
+        urllib.request.urlopen(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
+    except Exception as e:
+        logger.warning("deleteWebhook: %s", e)
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))

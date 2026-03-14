@@ -1,0 +1,76 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: taskcash
+      POSTGRES_USER: taskcash
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskcash"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    env_file: .env
+    restart: always
+    ports:
+      - "127.0.0.1:8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: ./backend
+    env_file: .env
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    command: celery -A app.workers.celery_app worker -l info -Q verification,notifications
+
+  user_bot:
+    build: ./bot
+    env_file: .env
+    depends_on:
+      - backend
+    volumes:
+      - ./bot:/app
+    command: python user_bot.py
+    restart: always
+
+  admin_bot:
+    build: ./bot
+    env_file: .env
+    depends_on:
+      - backend
+    volumes:
+      - ./bot:/app
+    command: python admin_bot.py
+    restart: always
+
+volumes:
+  postgres_data:
+  redis_data:

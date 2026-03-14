@@ -1,0 +1,2 @@
+-- Добавить колонку full_name в users (если alembic upgrade head недоступен, выполните вручную):
+-- ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(256) NULL;
