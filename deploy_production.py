@@ -26,19 +26,22 @@ ADMIN_APP_URL = 'https://admin.taskcashbot.ru'
 BASE = os.path.dirname(os.path.abspath(__file__))
 PRODUCTION = os.path.join(BASE, 'production')
 REMOTE_ROOT = '/root/taskcash'
+GIT_REPO = 'https://github.com/daniil248/prodtaskcash.git'
+FROM_GIT = '--from-git' in sys.argv
 
-# Локальная сборка frontend и admin (чтобы не тянуть node на сервере и не упираться в лимит Docker Hub)
+# Локальная сборка frontend и admin (только при деплое через SFTP, не при --from-git)
 import subprocess
-for name, path in [('frontend', os.path.join(BASE, 'frontend')), ('admin', os.path.join(BASE, 'admin'))]:
-    dist_path = os.path.join(path, 'dist')
-    if not os.path.isdir(dist_path) or not os.listdir(dist_path):
-        print(f'Локальная сборка {name}...')
-        try:
-            subprocess.run(['npm', 'run', 'build'], cwd=path, capture_output=True, timeout=180, shell=True)
-        except Exception as e:
-            print(f'  [WARN] {e}')
-    else:
-        print(f'{name}/dist есть, пропуск сборки.')
+if not FROM_GIT:
+    for name, path in [('frontend', os.path.join(BASE, 'frontend')), ('admin', os.path.join(BASE, 'admin'))]:
+        dist_path = os.path.join(path, 'dist')
+        if not os.path.isdir(dist_path) or not os.listdir(dist_path):
+            print(f'Локальная сборка {name}...')
+            try:
+                subprocess.run(['npm', 'run', 'build'], cwd=path, capture_output=True, timeout=180, shell=True)
+            except Exception as e:
+                print(f'  [WARN] {e}')
+        else:
+            print(f'{name}/dist есть, пропуск сборки.')
 
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -79,6 +82,109 @@ def run(cmd, timeout=120):
 
 def rel(path: str) -> str:
     return path.replace('/', os.sep)
+
+# ---------- Режим деплоя из GitHub (--from-git) ----------
+if FROM_GIT:
+    print('Режим: деплой из GitHub (git pull + scripts/deploy_from_git.sh)')
+    has_git = run(f'test -d {REMOTE_ROOT}/.git && echo ok') or ''
+    if 'ok' not in has_git:
+        run(f'mkdir -p {REMOTE_ROOT}; cd {REMOTE_ROOT} && git clone {GIT_REPO} .', timeout=120)
+    else:
+        run(f'cd {REMOTE_ROOT} && git pull origin main', timeout=60)
+    # .env на сервере
+    run(f'mkdir -p {REMOTE_ROOT}')
+    env_exists_out = run(f'test -f {REMOTE_ROOT}/.env && echo ok') or ''
+    if 'ok' not in env_exists_out:
+        postgres_pass = secrets.token_hex(16)
+        jwt_secret = secrets.token_hex(32)
+        admin_secret = secrets.token_hex(32)
+        env_content = f"""POSTGRES_PASSWORD={postgres_pass}
+DATABASE_URL=postgresql+asyncpg://taskcash:{postgres_pass}@postgres:5432/taskcash
+REDIS_URL=redis://redis:6379/0
+
+BOT_TOKEN={BOT_TOKEN}
+BOT_USERNAME={BOT_USERNAME}
+MINI_APP_URL={MINI_APP_URL}
+
+ADMIN_BOT_TOKEN={ADMIN_BOT_TOKEN}
+ADMIN_APP_URL={ADMIN_APP_URL}
+
+ADMIN_TG_IDS=
+
+BACKEND_URL=http://backend:8000
+
+JWT_SECRET={jwt_secret}
+JWT_EXPIRE_HOURS=168
+
+ADMIN_SECRET={admin_secret}
+
+MIN_WITHDRAWAL=10.0
+MAX_WITHDRAWAL_DAY=1000.0
+WITHDRAWAL_FEE_PERCENT=5.0
+
+REFERRAL_REWARD=0.50
+REFERRAL_MIN_TASKS=3
+"""
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.env', delete=False, encoding='utf-8') as f:
+            f.write(env_content)
+            tmp = f.name
+        try:
+            sftp = ssh.open_sftp()
+            sftp.put(tmp, REMOTE_ROOT + '/.env')
+            sftp.close()
+        finally:
+            os.unlink(tmp)
+        print('Created new .env with generated secrets.')
+    else:
+        run(f"sed -i 's|^BOT_TOKEN=.*|BOT_TOKEN={BOT_TOKEN}|' {REMOTE_ROOT}/.env")
+        run(f"sed -i 's|^MINI_APP_URL=.*|MINI_APP_URL={MINI_APP_URL}|' {REMOTE_ROOT}/.env")
+        run(f"sed -i 's|^ADMIN_BOT_TOKEN=.*|ADMIN_BOT_TOKEN={ADMIN_BOT_TOKEN}|' {REMOTE_ROOT}/.env")
+        run(f"sed -i 's|^ADMIN_APP_URL=.*|ADMIN_APP_URL={ADMIN_APP_URL}|' {REMOTE_ROOT}/.env")
+        run(f"grep -q '^ADMIN_TG_IDS=' {REMOTE_ROOT}/.env || echo 'ADMIN_TG_IDS=' >> {REMOTE_ROOT}/.env")
+        run(f"sed -i 's|^ADMIN_TG_IDS=.*|ADMIN_TG_IDS=|' {REMOTE_ROOT}/.env")
+        print('Updated .env tokens/URLs.')
+    # Bootstrap
+    check = run('which docker 2>/dev/null && echo ok || true')
+    if 'ok' not in (check or ''):
+        run('apt-get update -qq && apt-get install -y docker.io 2>&1 | tail -8', timeout=120)
+        run('systemctl start docker 2>/dev/null; systemctl enable docker 2>/dev/null || true')
+    check = run('(which docker-compose 2>/dev/null && echo ok) || (docker compose version 2>/dev/null && echo ok) || true')
+    if 'ok' not in (check or ''):
+        run('curl -sL "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose 2>&1', timeout=30)
+    if 'ok' not in (run('which nginx 2>/dev/null && echo ok') or ''):
+        run('apt-get install -y nginx 2>&1 | tail -3', timeout=60)
+    run('mkdir -p /etc/nginx/sites-enabled', timeout=5)
+    if 'ok' not in (run('which certbot 2>/dev/null && echo ok') or ''):
+        run('apt-get install -y certbot 2>&1 | tail -3', timeout=90)
+    # SSL
+    cert_user = run(f'test -d /etc/letsencrypt/live/user.taskcashbot.ru && echo ok') or ''
+    cert_admin = run(f'test -d /etc/letsencrypt/live/admin.taskcashbot.ru && echo ok') or ''
+    if 'ok' not in cert_user or 'ok' not in cert_admin:
+        run('systemctl stop nginx 2>/dev/null || nginx -s stop 2>/dev/null || true', timeout=10)
+        time.sleep(2)
+        if 'ok' not in cert_user:
+            run('certbot certonly --standalone -d user.taskcashbot.ru --non-interactive --agree-tos --email admin@taskcashbot.ru 2>&1', timeout=90)
+        if 'ok' not in cert_admin:
+            run('certbot certonly --standalone -d admin.taskcashbot.ru --non-interactive --agree-tos --email admin@taskcashbot.ru 2>&1', timeout=90)
+        run('systemctl start nginx 2>/dev/null || true', timeout=10)
+    run('ufw allow 80 2>/dev/null; ufw allow 443 2>/dev/null; ufw --force enable 2>/dev/null; true', timeout=10)
+    # Docker mirror
+    run(r'mkdir -p /etc/docker; if ! grep -q "registry-mirrors" /etc/docker/daemon.json 2>/dev/null; then echo \'{"registry-mirrors":["https://docker.1ms.run"]}\' > /etc/docker/daemon.json; systemctl restart docker 2>/dev/null; sleep 5; fi', timeout=30)
+    # Запуск деплой-скрипта на сервере
+    run(f'cd {REMOTE_ROOT} && chmod +x scripts/deploy_from_git.sh && bash scripts/deploy_from_git.sh', timeout=600)
+    # Проверки
+    code = run('curl -s -o /dev/null -w "%{http_code}" --connect-timeout 3 http://127.0.0.1:8001/api/settings/public')
+    if code and code.strip() == '200':
+        print('OK: API 8001 -> 200.')
+    code_u = run('curl -sk -o /dev/null -w "%{http_code}" --connect-timeout 5 -H "Host: user.taskcashbot.ru" https://127.0.0.1/')
+    code_a = run('curl -sk -o /dev/null -w "%{http_code}" --connect-timeout 5 -H "Host: admin.taskcashbot.ru" https://127.0.0.1/')
+    print(f'HTTPS user: {code_u or "?"}, admin: {code_a or "?"}')
+    print('\n=== DONE (from git) ===')
+    print('Мини-апп: https://user.taskcashbot.ru')
+    print('Админка:  https://admin.taskcashbot.ru')
+    ssh.close()
+    sys.exit(0)
 
 def sftp_mkdir_p(sftp, path):
     path = path.replace('\\', '/')

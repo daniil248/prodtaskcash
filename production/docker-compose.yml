@@ -24,8 +24,10 @@ services:
       retries: 5
 
   backend:
-    build: ./backend
-    env_file: .env
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    env_file: ../.env
     restart: always
     ports:
       - "127.0.0.1:8001:8000"
@@ -35,12 +37,14 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app
+      - ../backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   worker:
-    build: ./backend
-    env_file: .env
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    env_file: ../.env
     restart: always
     depends_on:
       postgres:
@@ -48,26 +52,30 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app
+      - ../backend:/app
     command: celery -A app.workers.celery_app worker -l info -Q verification,notifications
 
   user_bot:
-    build: ./bot
-    env_file: .env
+    build:
+      context: ..
+      dockerfile: bot/Dockerfile
+    env_file: ../.env
     depends_on:
       - backend
     volumes:
-      - ./bot:/app
+      - ../bot:/app
     command: python user_bot.py
     restart: always
 
   admin_bot:
-    build: ./bot
-    env_file: .env
+    build:
+      context: ..
+      dockerfile: bot/Dockerfile
+    env_file: ../.env
     depends_on:
       - backend
     volumes:
-      - ./bot:/app
+      - ../bot:/app
     command: python admin_bot.py
     restart: always
 
