@@ -37,15 +37,17 @@ python deploy_production.py --from-git
 
 ```bash
 cd /root/taskcash   # или куда клонировали репозиторий
+# Если git pull ругается на локальные изменения:
+git reset --hard origin/main
 git pull origin main
-# Создайте .env из .env.example и заполните (токены, домены, пароли)
+# Если нет .env: bash scripts/create_env.sh
 bash scripts/deploy_from_git.sh
 ```
 
 Скрипт `scripts/deploy_from_git.sh`:
 
 - при отсутствии `frontend/dist` и `admin/dist` — собирает фронты (npm или через Docker);
-- поднимает сервисы: `docker compose -f production/docker-compose.yml up -d --build`;
+- собирает образы backend/bot через `docker build --network=host` (чтобы pip видел DNS), затем `docker-compose up -d`;
 - выполняет миграции Alembic;
 - сбрасывает webhook ботов (long polling);
 - копирует статику в `/var/www/taskcash` и перезагружает nginx.

@@ -24,6 +24,7 @@ services:
       retries: 5
 
   backend:
+    image: taskcash_backend
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -41,6 +42,7 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   worker:
+    image: taskcash_worker
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -56,9 +58,10 @@ services:
     command: celery -A app.workers.celery_app worker -l info -Q verification,notifications
 
   user_bot:
+    image: taskcash_user_bot
     build:
-      context: ..
-      dockerfile: bot/Dockerfile
+      context: ../bot
+      dockerfile: Dockerfile
     env_file: ../.env
     depends_on:
       - backend
@@ -68,6 +71,7 @@ services:
     restart: always
 
   admin_bot:
+    image: taskcash_admin_bot
     build:
       context: ../bot
       dockerfile: Dockerfile

@@ -26,14 +26,22 @@ for name in frontend admin; do
   fi
 done
 
-# Docker: DNS в контейнерах (иначе pip при сборке не резолвит pypi.org)
-bash "$ROOT/scripts/ensure_docker_dns.sh"
+# Docker: DNS в контейнерах для запущенных контейнеров
+bash "$ROOT/scripts/ensure_docker_dns.sh" 2>/dev/null || true
+
+# Сборка образов с сетью хоста (--network=host), иначе в build нет DNS и pip не резолвит pypi.org
+echo "Building backend image (host network)..."
+docker build --network=host -t taskcash_backend -f "$ROOT/backend/Dockerfile" "$ROOT/backend"
+docker build --network=host -t taskcash_worker -f "$ROOT/backend/Dockerfile" "$ROOT/backend"
+echo "Building bot images (host network)..."
+docker build --network=host -t taskcash_user_bot -f "$ROOT/bot/Dockerfile" "$ROOT/bot"
+docker build --network=host -t taskcash_admin_bot -f "$ROOT/bot/Dockerfile" "$ROOT/bot"
 
 # Docker — только docker-compose (дефис), не "docker compose"
 DC="docker-compose"
 [ -x /usr/bin/docker-compose ] && DC="/usr/bin/docker-compose"
 [ -x /usr/local/bin/docker-compose ] && DC="/usr/local/bin/docker-compose"
-$DC -f "$ROOT/production/docker-compose.yml" up -d --build
+$DC -f "$ROOT/production/docker-compose.yml" up -d
 
 # Ждём backend
 for i in $(seq 1 30); do
