@@ -9,6 +9,25 @@ import sys
 import time
 import secrets
 sys.stdout.reconfigure(encoding='utf-8')
+# Пишем вывод ещё в лог-файл
+_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'deploy_log.txt')
+_log_file = open(_log_path, 'w', encoding='utf-8')
+class _Tee:
+    def __init__(self, out, f):
+        self._out, self._f = out, f
+    def write(self, s):
+        self._out.write(s)
+        self._out.flush()
+        try:
+            self._f.write(s)
+            self._f.flush()
+        except Exception:
+            pass
+    def flush(self):
+        self._out.flush()
+        self._f.flush()
+sys.stdout = _Tee(sys.stdout, _log_file)
+sys.stderr = _Tee(sys.stderr, _log_file)
 import paramiko
 
 HOST = '5.129.247.36'
@@ -64,8 +83,8 @@ for attempt in range(1, 11):
         break
     except Exception:
         if attempt < 10:
-            print(f'Попытка {attempt}/10, жду 5 мин...')
-            time.sleep(300)
+            print(f'Попытка {attempt}/10, жду 30 сек...')
+            time.sleep(30)
         else:
             raise
 
