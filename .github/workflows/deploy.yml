@@ -2,6 +2,7 @@ name: Deploy to production
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -16,7 +17,7 @@ jobs:
           port: 22
           username: ${{ secrets.PROD_SSH_USER }}
           password: ${{ secrets.PROD_SSH_PASS }}
-          timeout: 60s
+          timeout: 120s
           command_timeout: 15m
           envs: BOT_TOKEN,ADMIN_BOT_TOKEN
           script: |
