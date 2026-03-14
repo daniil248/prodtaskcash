@@ -10,8 +10,11 @@ echo "=== Deploy from git @ $ROOT ==="
 command -v nginx >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y nginx)
 command -v certbot >/dev/null 2>&1 || (apt-get install -y certbot)
 mkdir -p /etc/nginx/sites-enabled
-# SSL — если нет сертификатов
+# Убираем дефолтный сайт, чтобы работали наши server_name
+rm -f /etc/nginx/sites-enabled/default
+# SSL — один сертификат на оба домена (лежит в user.taskcashbot.ru)
 [ ! -d /etc/letsencrypt/live/user.taskcashbot.ru ] && (systemctl stop nginx 2>/dev/null || true; certbot certonly --standalone -d user.taskcashbot.ru -d admin.taskcashbot.ru --non-interactive --agree-tos -m admin@taskcashbot.ru 2>/dev/null || true; systemctl start nginx 2>/dev/null || true)
+systemctl start nginx 2>/dev/null || true
 ufw allow 80 2>/dev/null; ufw allow 443 2>/dev/null; ufw --force enable 2>/dev/null || true
 
 # Frontend/admin dist (если нет — собираем; падение сборки не останавливает деплой)
@@ -46,7 +49,12 @@ docker build --network=host -t taskcash_admin_bot -f "$ROOT/bot/Dockerfile" "$RO
 DC="docker-compose"
 [ -x /usr/bin/docker-compose ] && DC="/usr/bin/docker-compose"
 [ -x /usr/local/bin/docker-compose ] && DC="/usr/local/bin/docker-compose"
-$DC --env-file "$ROOT/.env" -f "$ROOT/production/docker-compose.yml" up -d
+COMPOSE_CMD="$DC --env-file $ROOT/.env -f $ROOT/production/docker-compose.yml"
+# Освобождаем 8001: останавливаем старый стек и любой контейнер на 8001
+$COMPOSE_CMD down 2>/dev/null || true
+docker stop production-backend-1 taskcash-backend-1 2>/dev/null || true
+sleep 2
+$COMPOSE_CMD up -d
 
 # Ждём backend
 for i in $(seq 1 30); do
@@ -79,10 +87,11 @@ cp -r "$ROOT/frontend/dist" /var/www/taskcash/frontend 2>/dev/null || true
 cp -r "$ROOT/admin/dist" /var/www/taskcash/admin 2>/dev/null || true
 chown -R www-data:www-data /var/www/taskcash 2>/dev/null || true
 
-# Конфиги nginx (production)
+# Конфиги nginx (production) — оба домена на один сертификат user.taskcashbot.ru
 for f in "$ROOT/production/nginx/"*.conf; do
   [ -f "$f" ] && cp "$f" /etc/nginx/sites-enabled/ && echo "Copied $(basename "$f")"
 done
-nginx -t 2>/dev/null && (nginx -s reload 2>/dev/null || systemctl reload nginx 2>/dev/null) || true
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && (nginx -s reload 2>/dev/null || systemctl reload nginx 2>/dev/null) || systemctl restart nginx 2>/dev/null || true
 
 echo "=== Deploy done ==="
