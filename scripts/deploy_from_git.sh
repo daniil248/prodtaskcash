@@ -26,6 +26,9 @@ for name in frontend admin; do
   fi
 done
 
+# Docker: DNS в контейнерах (иначе pip при сборке не резолвит pypi.org)
+bash "$ROOT/scripts/ensure_docker_dns.sh"
+
 # Docker — только docker-compose (дефис), не "docker compose"
 DC="docker-compose"
 [ -x /usr/bin/docker-compose ] && DC="/usr/bin/docker-compose"
