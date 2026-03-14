@@ -10,8 +10,11 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 5.129.247.36
+          port: 22
           username: root
           password: ${{ secrets.SSH_PASS_TASKCASH }}
+          timeout: 60s
+          command_timeout: 15m
           script: |
             set -e
             if [ ! -d /root/taskcash/.git ]; then

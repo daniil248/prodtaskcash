@@ -1,5 +1,11 @@
 # Деплой TaskCash (production)
 
+## Где находятся Secrets and variables
+
+В репозитории на GitHub: **Settings** (иконка шестерёнки вверху) → в левой колонке раздел **Security** → **Secrets and variables** → **Actions**. Там список **Repository secrets** (например `SSH_PASS_TASKCASH`). Секреты нужны для автодеплоя по SSH из GitHub Actions. Для workflow «Deploy to production» нужен секрет **SSH_PASS_TASKCASH** (пароль root на сервере 5.129.247.36).
+
+Если в Actions шаг «Deploy via SSH» падает с ошибкой **timeout** или **i/o timeout** — сервер не доступен с раннеров GitHub (фаервол/сеть). Тогда деплой только через `deploy_production.py` с машины, откуда есть SSH до сервера.
+
 ## Репозиторий для продакшена
 
 - **GitHub:** https://github.com/daniil248/prodtaskcash  
