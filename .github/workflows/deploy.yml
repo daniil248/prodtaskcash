@@ -9,10 +9,10 @@ jobs:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: 5.129.247.36
+          host: ${{ secrets.PROD_SSH_HOST }}
           port: 22
-          username: root
-          password: ${{ secrets.SSH_PASS_TASKCASH }}
+          username: ${{ secrets.PROD_SSH_USER }}
+          password: ${{ secrets.PROD_SSH_PASS }}
           timeout: 60s
           command_timeout: 15m
           script: |
