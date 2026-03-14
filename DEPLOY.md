@@ -2,7 +2,7 @@
 
 ## Где находятся Secrets and variables
 
-В репозитории на GitHub: **Settings** (иконка шестерёнки вверху) → в левой колонке раздел **Security** → **Secrets and variables** → **Actions**. Там список **Repository secrets** (например `SSH_PASS_TASKCASH`). Секреты нужны для автодеплоя по SSH из GitHub Actions. Для workflow «Deploy to production» нужны: **PROD_SSH_HOST**, **PROD_SSH_USER**, **PROD_SSH_PASS**.
+В репозитории на GitHub: **Settings** (иконка шестерёнки вверху) → в левой колонке раздел **Security** → **Secrets and variables** → **Actions**. Там список **Repository secrets** (например `SSH_PASS_TASKCASH`). Секреты для автодеплоя по SSH: **PROD_SSH_HOST**, **PROD_SSH_USER**, **PROD_SSH_PASS**. Токены ботов подставляются из workflow (при необходимости можно переопределить через секреты BOT_TOKEN, ADMIN_BOT_TOKEN).
 
 Если в Actions шаг «Deploy via SSH» падает с ошибкой **timeout** или **i/o timeout** — сервер не доступен с раннеров GitHub (фаервол/сеть). Тогда деплой только через `deploy_production.py` с машины, откуда есть SSH до сервера.
 
