@@ -81,10 +81,11 @@ docker restart production-user_bot-1 production-admin_bot-1 2>/dev/null || \
   docker restart taskcash-user_bot-1 taskcash-admin_bot-1 2>/dev/null || \
   docker restart taskcash_user_bot_1 taskcash_admin_bot_1 2>/dev/null || true
 
-# Nginx: статика
-mkdir -p /var/www/taskcash
-cp -r "$ROOT/frontend/dist" /var/www/taskcash/frontend 2>/dev/null || true
-cp -r "$ROOT/admin/dist" /var/www/taskcash/admin 2>/dev/null || true
+# Nginx: статика (содержимое dist в frontend/ и admin/, чтобы root отдавал index.html)
+mkdir -p /var/www/taskcash/frontend /var/www/taskcash/admin
+rm -rf /var/www/taskcash/frontend/* /var/www/taskcash/admin/*
+[ -f "$ROOT/frontend/dist/index.html" ] && cp -r "$ROOT/frontend/dist/"* /var/www/taskcash/frontend/ || true
+[ -f "$ROOT/admin/dist/index.html" ] && cp -r "$ROOT/admin/dist/"* /var/www/taskcash/admin/ || true
 chown -R www-data:www-data /var/www/taskcash 2>/dev/null || true
 
 # Конфиги nginx — удаляем старые, иначе conflicting server name

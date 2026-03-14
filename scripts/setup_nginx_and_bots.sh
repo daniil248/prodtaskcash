@@ -6,11 +6,16 @@ cd "$ROOT"
 
 echo "=== Nginx + боты ==="
 
-# SSL (один сертификат на оба домена)
+# SSL — один сертификат на ОБА домена (иначе Chrome: ERR_CERT_COMMON_NAME_INVALID на admin)
 if [ ! -d /etc/letsencrypt/live/user.taskcashbot.ru ]; then
-  echo "Getting SSL cert..."
+  echo "Getting SSL cert (both domains)..."
   systemctl stop nginx 2>/dev/null || true
   certbot certonly --standalone -d user.taskcashbot.ru -d admin.taskcashbot.ru --non-interactive --agree-tos -m admin@taskcashbot.ru 2>/dev/null || true
+  systemctl start nginx 2>/dev/null || true
+else
+  echo "Expanding cert to include admin.taskcashbot.ru if needed..."
+  systemctl stop nginx 2>/dev/null || true
+  certbot certonly --standalone -d user.taskcashbot.ru -d admin.taskcashbot.ru --expand --non-interactive -m admin@taskcashbot.ru 2>/dev/null || true
   systemctl start nginx 2>/dev/null || true
 fi
 ufw allow 80 2>/dev/null; ufw allow 443 2>/dev/null; ufw --force enable 2>/dev/null || true
@@ -23,9 +28,11 @@ for name in frontend admin; do
     docker run --rm -v "$ROOT/$name:/app" -w /app node:20-alpine sh -c "npm install --silent && npm run build" 2>/dev/null || true
   fi
 done
-mkdir -p /var/www/taskcash
-cp -r "$ROOT/frontend/dist" /var/www/taskcash/frontend 2>/dev/null || true
-cp -r "$ROOT/admin/dist" /var/www/taskcash/admin 2>/dev/null || true
+# Статика: index.html и assets прямо в frontend/ и admin/
+mkdir -p /var/www/taskcash/frontend /var/www/taskcash/admin
+rm -rf /var/www/taskcash/frontend/* /var/www/taskcash/admin/*
+[ -f "$ROOT/frontend/dist/index.html" ] && cp -r "$ROOT/frontend/dist/"* /var/www/taskcash/frontend/ || true
+[ -f "$ROOT/admin/dist/index.html" ] && cp -r "$ROOT/admin/dist/"* /var/www/taskcash/admin/ || true
 chown -R www-data:www-data /var/www/taskcash 2>/dev/null || true
 
 # Конфиги nginx (оба домена на сертификат user.taskcashbot.ru)
