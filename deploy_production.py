@@ -9,25 +9,6 @@ import sys
 import time
 import secrets
 sys.stdout.reconfigure(encoding='utf-8')
-# Пишем вывод ещё в лог-файл
-_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'deploy_log.txt')
-_log_file = open(_log_path, 'w', encoding='utf-8')
-class _Tee:
-    def __init__(self, out, f):
-        self._out, self._f = out, f
-    def write(self, s):
-        self._out.write(s)
-        self._out.flush()
-        try:
-            self._f.write(s)
-            self._f.flush()
-        except Exception:
-            pass
-    def flush(self):
-        self._out.flush()
-        self._f.flush()
-sys.stdout = _Tee(sys.stdout, _log_file)
-sys.stderr = _Tee(sys.stderr, _log_file)
 import paramiko
 
 HOST = '5.129.247.36'
@@ -66,8 +47,7 @@ ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
 def connect_ssh():
-    # timeout — таймаут TCP; banner_timeout — время ожидания SSH-баннера (часто причина "Error reading SSH protocol banner")
-    ssh.connect(HOST, port=PORT, username=USER, password=PASS, timeout=60, banner_timeout=60)
+    ssh.connect(HOST, port=PORT, username=USER, password=PASS, timeout=25, banner_timeout=25)
 
 def reconnect_ssh():
     try:
@@ -76,15 +56,15 @@ def reconnect_ssh():
         pass
     connect_ssh()
 
-for attempt in range(1, 11):
+for attempt in range(1, 4):
     try:
         connect_ssh()
         print('Connected.')
         break
     except Exception:
-        if attempt < 10:
-            print(f'Попытка {attempt}/10, жду 30 сек...')
-            time.sleep(30)
+        if attempt < 3:
+            print(f'Попытка {attempt}/3, 10 сек...')
+            time.sleep(10)
         else:
             raise
 
@@ -243,10 +223,8 @@ def upload_tree(sftp, local_path, remote_path, exclude_dirs=None):
             try:
                 sftp.put(local_file, remote_file)
                 n += 1
-                if n % 50 == 0:
+                if n % 100 == 0:
                     print('.', end='', flush=True)
-                if n % 200 == 0:
-                    time.sleep(0.5)
             except Exception as ex:
                 print(f'\n[ERR] {local_file}: {ex}')
     return n
@@ -417,24 +395,25 @@ run(f'cd {REMOTE_ROOT} && docker-compose up -d --build 2>&1', timeout=300)
 
 # --- 6. Ожидание backend 8001 ---
 print('\n--- Ожидание backend 8001 ---')
-for attempt in range(1, 30):
-    time.sleep(2)
+for attempt in range(1, 16):
+    time.sleep(1)
     code = run('curl -s -o /dev/null -w "%{http_code}" --connect-timeout 2 http://127.0.0.1:8001/api/settings/public')
     if code and code.strip() == '200':
-        print('Backend 8001 отвечает 200.')
+        print('Backend OK.')
         break
-    print(f'  попытка {attempt}/29: {code or "нет ответа"}')
+    if attempt < 15:
+        print(f'  {attempt}/15: {code or "—"}')
 else:
-    print('WARN: backend не ответил 200 за 60 сек.')
+    print('WARN: backend не ответил.')
 
 # --- 7. Миграции ---
-time.sleep(2)
+time.sleep(1)
 run('docker exec taskcash-backend-1 sh -c "cd /app && alembic upgrade head" 2>/dev/null || docker exec taskcash_backend_1 sh -c "cd /app && alembic upgrade head" 2>/dev/null || true', timeout=30)
 
 # --- 8. Удаление webhook (чтобы боты работали по long polling) и перезапуск ---
 run(f'curl -s "https://api.telegram.org/bot{BOT_TOKEN}/deleteWebhook" 2>/dev/null; curl -s "https://api.telegram.org/bot{ADMIN_BOT_TOKEN}/deleteWebhook" 2>/dev/null', timeout=15)
-run('docker restart taskcash-worker-1 taskcash-user_bot-1 taskcash-admin_bot-1 2>/dev/null || docker restart taskcash_worker_1 taskcash_user_bot_1 taskcash_admin_bot_1 2>/dev/null || true', timeout=45)
-time.sleep(5)
+run('docker restart taskcash-worker-1 taskcash-user_bot-1 taskcash-admin_bot-1 2>/dev/null || docker restart taskcash_worker_1 taskcash_user_bot_1 taskcash_admin_bot_1 2>/dev/null || true', timeout=30)
+time.sleep(2)
 
 # --- 9. Фаервол: открыть 80 и 443 ---
 run('ufw allow 80 2>/dev/null; ufw allow 443 2>/dev/null; ufw --force enable 2>/dev/null; true', timeout=10)
