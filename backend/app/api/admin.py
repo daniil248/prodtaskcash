@@ -715,7 +715,10 @@ async def update_system_setting(
 # ── UTM sources ───────────────────────────────────────────────────────────────
 
 def _utm_link(slug: str) -> str:
-    return f"https://t.me/{settings.BOT_USERNAME}?startapp=utm_{slug}"
+    # Используем ?start= (не ?startapp=) — чтобы открывался бот-чат,
+    # юзер нажимал «Start», бот появлялся в чатах и потом был легко findable.
+    # Бот затем передаст этот код в мини-апп через WebApp-кнопку.
+    return f"https://t.me/{settings.BOT_USERNAME}?start=utm_{slug}"
 
 
 async def _utm_stats_row(db: AsyncSession, utm: UtmSource) -> UtmSourceSchema:

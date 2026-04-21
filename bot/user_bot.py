@@ -66,7 +66,10 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     args = context.args
     ref_code = args[0] if args else None
 
-    is_referral = bool(ref_code and ref_code != str(user.id))
+    # UTM-источники (ссылки из админки, формат "utm_<slug>") — приветствие как для нового,
+    # не как для реферала, потому что юзера пригласил не друг, а канал/маркетинг.
+    is_utm = bool(ref_code) and ref_code.startswith("utm_")
+    is_referral = bool(ref_code) and not is_utm and ref_code != str(user.id)
     text = WELCOME_REFERRAL if is_referral else WELCOME_NEW
 
     logger.info("cmd_start: user=%s ref=%s url=%s", user.id, ref_code, MINI_APP_URL)
