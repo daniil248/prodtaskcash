@@ -18,11 +18,17 @@ COOLDOWN_SEC=1800   # не слать чаще чем раз в 30 минут
 # Читаем .env
 # shellcheck disable=SC1091
 set +u
-source <(grep -E '^(ADMIN_BOT_TOKEN|ADMIN_CHAT_ID)=' "$REPO_DIR/.env" | sed 's/^/export /')
+source <(grep -E '^(ADMIN_BOT_TOKEN|ADMIN_CHAT_ID|ADMIN_TG_IDS)=' "$REPO_DIR/.env" | sed 's/^/export /')
 set -u
 
-if [ -z "${ADMIN_BOT_TOKEN:-}" ] || [ -z "${ADMIN_CHAT_ID:-}" ]; then
-    echo "ADMIN_BOT_TOKEN или ADMIN_CHAT_ID не заданы в .env — алерт отключён" >&2
+# Чат-id берём из ADMIN_CHAT_ID (если задан), иначе — первый id из ADMIN_TG_IDS (comma-separated).
+CHAT_ID="${ADMIN_CHAT_ID:-}"
+if [ -z "$CHAT_ID" ] && [ -n "${ADMIN_TG_IDS:-}" ]; then
+    CHAT_ID="${ADMIN_TG_IDS%%,*}"
+fi
+
+if [ -z "${ADMIN_BOT_TOKEN:-}" ] || [ -z "$CHAT_ID" ]; then
+    echo "ADMIN_BOT_TOKEN или ADMIN_CHAT_ID/ADMIN_TG_IDS не заданы в .env — алерт отключён" >&2
     exit 0
 fi
 
@@ -48,6 +54,6 @@ TEXT="⚠️ TaskCash backend: ${COUNT} × 5xx за ${INTERVAL}
 $SAMPLE"
 
 curl -sS "https://api.telegram.org/bot${ADMIN_BOT_TOKEN}/sendMessage" \
-    -d chat_id="${ADMIN_CHAT_ID}" \
+    -d chat_id="${CHAT_ID}" \
     -d text="$TEXT" \
     --max-time 10 > /dev/null || true
