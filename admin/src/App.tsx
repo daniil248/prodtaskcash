@@ -8,6 +8,7 @@ import WithdrawalsPage from './pages/WithdrawalsPage'
 import BlacklistPage from './pages/BlacklistPage'
 import SettingsPage from './pages/SettingsPage'
 import BroadcastPage from './pages/BroadcastPage'
+import UtmPage from './pages/UtmPage'
 import './styles.css'
 
 const NAV = [
@@ -16,6 +17,7 @@ const NAV = [
   { path: '/users', label: '👤 Пользователи' },
   { path: '/withdrawals', label: '💸 Выводы' },
   { path: '/broadcast', label: '📢 Рассылка' },
+  { path: '/utm', label: '🔗 UTM-ссылки' },
   { path: '/blacklist', label: '🚫 Чёрный список' },
   { path: '/settings', label: '⚙️ Настройки' },
 ]
@@ -81,6 +83,7 @@ function AdminLayout() {
             <Route path="/users" element={<UsersPage />} />
             <Route path="/withdrawals" element={<WithdrawalsPage />} />
             <Route path="/broadcast" element={<BroadcastPage />} />
+            <Route path="/utm" element={<UtmPage />} />
             <Route path="/blacklist" element={<BlacklistPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />

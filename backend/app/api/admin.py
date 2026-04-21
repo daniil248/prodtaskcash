@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import (
     User, Task, TaskType, UserTask, UserTaskStatus, Transaction, TransactionType,
-    Withdrawal, WithdrawalStatus, BlacklistEntry, SystemSetting,
+    Withdrawal, WithdrawalStatus, BlacklistEntry, SystemSetting, UtmSource,
 )
 from app.schemas import (
     AdminLoginRequest, AdminLoginResponse, AdminUserSchema, AdminStatsSchema,
@@ -21,6 +21,7 @@ from app.schemas import (
     AdminWithdrawalAction, AdminBalanceAdjust,
     BlacklistEntrySchema, BlacklistCreateRequest,
     SystemSettingSchema, SystemSettingUpdateRequest,
+    UtmSourceCreate, UtmSourceSchema,
 )
 from app.api.deps import get_admin, ADMIN_PANEL_ENABLED_KEY
 from app.services.auth import create_admin_token
@@ -709,3 +710,90 @@ async def update_system_setting(
     await db.commit()
     await db.refresh(setting)
     return SystemSettingSchema.model_validate(setting)
+
+
+# ── UTM sources ───────────────────────────────────────────────────────────────
+
+def _utm_link(slug: str) -> str:
+    return f"https://t.me/{settings.BOT_USERNAME}?startapp=utm_{slug}"
+
+
+async def _utm_stats_row(db: AsyncSession, utm: UtmSource) -> UtmSourceSchema:
+    from app.services.referral import _get_sys_value
+    min_tasks = int(await _get_sys_value(db, "referral_min_tasks", settings.REFERRAL_MIN_TASKS))
+    # Регистраций (всего юзеров, пришедших по ссылке)
+    regs = (await db.execute(
+        select(func.count(User.id)).where(User.utm_source_id == utm.id)
+    )).scalar() or 0
+    # Активных — тех, кто выполнил >= min_tasks (UserTask status=completed)
+    completed_subq = (
+        select(UserTask.user_id, func.count(UserTask.id).label("cnt"))
+        .where(UserTask.status == UserTaskStatus.completed)
+        .group_by(UserTask.user_id)
+        .subquery()
+    )
+    active = (await db.execute(
+        select(func.count(User.id))
+        .select_from(User)
+        .join(completed_subq, completed_subq.c.user_id == User.id, isouter=True)
+        .where(
+            User.utm_source_id == utm.id,
+            User.is_banned == False,
+            func.coalesce(completed_subq.c.cnt, 0) >= min_tasks,
+        )
+    )).scalar() or 0
+    schema = UtmSourceSchema.model_validate(utm)
+    schema.link = _utm_link(utm.slug)
+    schema.registrations = int(regs)
+    schema.active_registrations = int(active)
+    return schema
+
+
+@router.get("/utm", response_model=list[UtmSourceSchema])
+async def list_utm_sources(db: AsyncSession = Depends(get_db), _: bool = Depends(get_admin)):
+    r = await db.execute(select(UtmSource).order_by(desc(UtmSource.created_at)))
+    return [await _utm_stats_row(db, utm) for utm in r.scalars().all()]
+
+
+@router.post("/utm", response_model=UtmSourceSchema, status_code=201)
+async def create_utm_source(
+    body: UtmSourceCreate,
+    db: AsyncSession = Depends(get_db),
+    _: bool = Depends(get_admin),
+):
+    name = (body.name or "").strip()
+    if not name:
+        raise HTTPException(400, "Название обязательно")
+    # Slug — 8 случайных букв+цифр, гарантируем уникальность в одном коммите.
+    import secrets, string
+    alphabet = string.ascii_lowercase + string.digits
+    for _ in range(8):
+        slug = "".join(secrets.choice(alphabet) for _ in range(8))
+        exists = (await db.execute(select(UtmSource).where(UtmSource.slug == slug))).scalar_one_or_none()
+        if not exists:
+            break
+    else:
+        raise HTTPException(500, "Не удалось сгенерировать уникальный slug")
+    utm = UtmSource(
+        slug=slug,
+        name=name[:128],
+        description=(body.description or "").strip() or None,
+    )
+    db.add(utm)
+    await db.commit()
+    await db.refresh(utm)
+    return await _utm_stats_row(db, utm)
+
+
+@router.delete("/utm/{utm_id}", status_code=204)
+async def delete_utm_source(
+    utm_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: bool = Depends(get_admin),
+):
+    utm = (await db.execute(select(UtmSource).where(UtmSource.id == utm_id))).scalar_one_or_none()
+    if not utm:
+        raise HTTPException(404, "UTM-источник не найден")
+    await db.delete(utm)
+    await db.commit()
+    return

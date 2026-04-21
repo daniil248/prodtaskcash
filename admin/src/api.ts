@@ -70,4 +70,8 @@ export const adminApi = {
   getSettings: () => api.get('/admin/settings'),
   updateSetting: (key: string, value: string) =>
     api.put(`/admin/settings/${key}`, { value }),
+
+  utmList: () => api.get('/admin/utm'),
+  utmCreate: (data: { name: string; description?: string }) => api.post('/admin/utm', data),
+  utmDelete: (id: number) => api.delete(`/admin/utm/${id}`),
 }

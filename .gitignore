@@ -34,10 +34,10 @@ check_*.py
 debug_*.py
 diagnose_*.py
 fix_*.py
+finalize_*.py
+test_*.py
 deploy_broadcast_fix.py
 deploy_frontend.py
 deploy_referral_goal.py
 deploy_start_bot.py
-test_referral_goal*.py
-test_ssh.py
 

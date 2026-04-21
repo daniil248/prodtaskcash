@@ -43,6 +43,20 @@ class WithdrawalStatus(str, enum.Enum):
     rejected = "rejected"
 
 
+class UtmSource(Base):
+    """UTM-источник: админ создаёт именованный источник трафика и получает ссылку
+    вида t.me/{bot}?startapp=utm_{slug}. Регистрации по ней попадают в статистику."""
+    __tablename__ = "utm_sources"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(String(48), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    users: Mapped[list["User"]] = relationship("User", back_populates="utm_source")
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -66,6 +80,10 @@ class User(Base):
     referrer_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     referral_reward_given: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    utm_source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("utm_sources.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     device_fingerprint: Mapped[str | None] = mapped_column(String(256))
     last_ip: Mapped[str | None] = mapped_column(String(64))
 
@@ -81,6 +99,7 @@ class User(Base):
     referrals: Mapped[list["User"]] = relationship(
         "User", foreign_keys="User.referrer_id", back_populates="referrer"
     )
+    utm_source: Mapped["UtmSource | None"] = relationship("UtmSource", back_populates="users")
     user_tasks: Mapped[list["UserTask"]] = relationship("UserTask", back_populates="user")
     transactions: Mapped[list["Transaction"]] = relationship("Transaction", back_populates="user")
     withdrawals: Mapped[list["Withdrawal"]] = relationship("Withdrawal", back_populates="user")

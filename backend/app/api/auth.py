@@ -86,16 +86,27 @@ async def telegram_auth(
     if not user:
         # --- Новый пользователь ---
         referrer = None
+        utm_source_id: int | None = None
         if body.referral_code:
-            try:
-                ref_tg_id = int(body.referral_code)
-                if ref_tg_id != telegram_id:
-                    ref_result = await db.execute(
-                        select(User).where(User.telegram_id == ref_tg_id)
-                    )
-                    referrer = ref_result.scalar_one_or_none()
-            except ValueError:
-                pass
+            code = body.referral_code.strip()
+            if code.startswith("utm_"):
+                # UTM-источник (создан админом): startapp=utm_<slug>
+                from app.models import UtmSource
+                slug = code[4:]
+                utm_result = await db.execute(select(UtmSource).where(UtmSource.slug == slug))
+                utm = utm_result.scalar_one_or_none()
+                if utm:
+                    utm_source_id = utm.id
+            else:
+                try:
+                    ref_tg_id = int(code)
+                    if ref_tg_id != telegram_id:
+                        ref_result = await db.execute(
+                            select(User).where(User.telegram_id == ref_tg_id)
+                        )
+                        referrer = ref_result.scalar_one_or_none()
+                except ValueError:
+                    pass
 
         initial_trust = 50
         trust_reason = "registration"
@@ -131,6 +142,7 @@ async def telegram_auth(
             language_code=tg_user.get("language_code"),
             photo_url=tg_user.get("photo_url"),
             referrer_id=referrer.id if referrer else None,
+            utm_source_id=utm_source_id,
             last_ip=client_ip,
             device_fingerprint=fp,
             trust_score=initial_trust,

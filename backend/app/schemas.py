@@ -243,6 +243,27 @@ class TaskUpdateRequest(TaskCreateRequest):
     is_active: bool = True
 
 
+# ── UTM sources ───────────────────────────────────────────────────────────────
+
+class UtmSourceCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class UtmSourceSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    slug: str
+    name: str
+    description: str | None = None
+    created_at: datetime
+    # Статистика (заполняется endpoint'ом):
+    link: str = ""
+    registrations: int = 0
+    active_registrations: int = 0
+
+
 class AdminUserSchema(UserSchema):
     full_name: str | None = None
     last_ip: str | None
