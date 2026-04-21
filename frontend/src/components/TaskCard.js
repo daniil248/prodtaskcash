@@ -7,12 +7,14 @@ const TYPE_COLORS = {
     like: '#FE5A5B',
     watch_ad: '#FA8D28',
     invite: '#23C366',
+    start_bot: '#7B61FF',
 };
 const TYPE_LABELS = {
     subscribe: 'Подписка',
     like: 'Лайк',
     watch_ad: 'Реклама',
     invite: 'Приглашение',
+    start_bot: 'Запуск бота',
 };
 // SVG icon paths extracted directly from task_subscribtion.svg / task_like.svg / task_ADS.svg
 function TypeIcon({ type }) {
@@ -28,6 +30,10 @@ function TypeIcon({ type }) {
     if (type === 'watch_ad') {
         // Play circle icon
         return (_jsxs("svg", { width: "28", height: "28", viewBox: "0 0 28 28", fill: "none", children: [_jsx("circle", { cx: "14", cy: "14", r: "14", fill: "#FFF3E0" }), _jsx("path", { d: "M11 10l9 4-9 4V10Z", fill: color })] }));
+    }
+    if (type === 'start_bot') {
+        // Robot icon (bot)
+        return (_jsxs("svg", { width: "28", height: "28", viewBox: "0 0 28 28", fill: "none", children: [_jsx("circle", { cx: "14", cy: "14", r: "14", fill: "#EEEAFF" }), _jsx("rect", { x: "8", y: "10", width: "12", height: "10", rx: "2", stroke: color, strokeWidth: "1.8" }), _jsx("circle", { cx: "11.5", cy: "14.5", r: "1.2", fill: color }), _jsx("circle", { cx: "16.5", cy: "14.5", r: "1.2", fill: color }), _jsx("path", { d: "M14 7v3", stroke: color, strokeWidth: "1.8", strokeLinecap: "round" }), _jsx("circle", { cx: "14", cy: "6.5", r: "1", fill: color })] }));
     }
     // invite
     return (_jsxs("svg", { width: "28", height: "28", viewBox: "0 0 28 28", fill: "none", children: [_jsx("circle", { cx: "14", cy: "14", r: "14", fill: "#E2F3EE" }), _jsx("path", { d: "M10 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM16 22v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M23 8v6M20 11h6", stroke: color, strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round" })] }));

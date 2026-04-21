@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TaskCash — обновление</title>
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; padding: 40px 20px; background: #f8f8fa; color: #02020E; }
+    .box { max-width: 360px; margin: 0 auto; text-align: center; background: #fff; border-radius: 16px; padding: 32px 24px; box-shadow: 0 2px 16px rgba(0,0,0,0.04); }
+    h1 { margin: 0 0 12px; font-size: 20px; }
+    p { margin: 8px 0; color: #4D536D; font-size: 14px; line-height: 1.5; }
+    button { margin-top: 20px; background: linear-gradient(135deg, #35DE66, #2CE1A1); color: #fff; border: none; padding: 12px 24px; border-radius: 100px; font-weight: 700; font-size: 15px; cursor: pointer; }
+    .ok { color: #23C366; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>Кэш очищен</h1>
+    <p id="status">Очищаем кэш, service worker и сохранённые данные…</p>
+    <button id="go" style="display:none" onclick="location.href='/'">Открыть TaskCash</button>
+  </div>
+  <script>
+    (async function() {
+      try {
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations()
+          for (const r of regs) { try { await r.unregister() } catch(e) {} }
+        }
+        if (window.caches) {
+          const keys = await caches.keys()
+          await Promise.all(keys.map(k => caches.delete(k)))
+        }
+        try { localStorage.clear() } catch(e) {}
+        try { sessionStorage.clear() } catch(e) {}
+      } catch(e) {}
+      document.getElementById('status').innerHTML = '<span class="ok">Готово</span> — можно возвращаться в приложение.'
+      document.getElementById('go').style.display = 'inline-block'
+      setTimeout(() => { location.href = '/' }, 1500)
+    })()
+  </script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-export type TaskType = 'subscribe' | 'like' | 'watch_ad' | 'invite'
+export type TaskType = 'subscribe' | 'watch_ad' | 'invite' | 'start_bot' | 'referral_goal'
 export type UserTaskStatus = 'in_progress' | 'checking' | 'completed' | 'failed' | 'expired'
 export type WithdrawalStatus = 'created' | 'processing' | 'security_check' | 'paid' | 'rejected'
 export type TransactionType = 'task_reward' | 'referral_bonus' | 'withdrawal' | 'withdrawal_fee' | 'adjustment' | 'penalty'
@@ -45,6 +45,11 @@ export interface Task {
   error_message?: string | null
   expires_at: string | null
   user_today_completions?: number
+  required_referrals?: number | null
+  user_first_checked_at?: string | null
+  has_timer?: boolean
+  timer_hours?: number | null
+  is_simulation?: boolean
 }
 
 export interface ReferralIncomeDay {
@@ -90,6 +95,7 @@ export interface TaskListResponse {
   total: number
   page: number
   pages: number
+  active_referrals?: number
 }
 
 export interface TransactionListResponse {

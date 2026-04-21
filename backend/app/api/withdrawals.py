@@ -116,6 +116,19 @@ async def create_withdrawal(
     if not allowed:
         raise HTTPException(status_code=403, detail=msg)
 
+    # Блокируем строку пользователя до конца транзакции, чтобы не было гонки
+    # двух одновременных запросов на вывод (TOCTOU): иначе сумма проверяется
+    # дважды до любого decrement, и оба проходят.
+    # populate_existing=True перетирает значения из identity map — иначе
+    # balance могло бы остаться старым из кеша сессии.
+    locked_result = await db.execute(
+        select(User)
+        .where(User.id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    user = locked_result.scalar_one()
+
     min_amount = await _get_sys_decimal(db, "min_withdrawal", settings.MIN_WITHDRAWAL)
     if body.amount < min_amount:
         raise HTTPException(status_code=400, detail=f"Минимальная сумма вывода: {min_amount:.0f}₽")

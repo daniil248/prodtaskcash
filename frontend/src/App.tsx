@@ -33,6 +33,37 @@ export default function App() {
     }
   }, [])
 
+  // Авто-обновление: при новом деплое бандл получает новый хэш в имени.
+  // Периодически и при возврате в приложение проверяем /index.html и сравниваем
+  // хэш <script src>. Если отличается — принудительно перезагружаем страницу,
+  // чтобы пользователь подхватил свежий код без ручных действий.
+  useEffect(() => {
+    const runningBundle = Array.from(document.scripts)
+      .map(s => s.getAttribute('src') || '')
+      .find(src => /\/assets\/index-[A-Za-z0-9_-]+\.js/.test(src))
+
+    if (!runningBundle) return
+
+    let reloading = false
+    const checkForUpdate = async () => {
+      if (reloading) return
+      try {
+        const res = await fetch('/?_=' + Date.now(), { cache: 'no-store' })
+        const html = await res.text()
+        const m = html.match(/\/assets\/index-[A-Za-z0-9_-]+\.js/)
+        if (m && !runningBundle.endsWith(m[0])) {
+          reloading = true
+          window.location.reload()
+        }
+      } catch { /* offline / network error — пропускаем */ }
+    }
+
+    const intervalId = setInterval(checkForUpdate, 60_000)
+    const onVis = () => { if (document.visibilityState === 'visible') checkForUpdate() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => { clearInterval(intervalId); document.removeEventListener('visibilitychange', onVis) }
+  }, [])
+
   useEffect(() => {
     const refresh = () => {
       if (!useStore.getState().token) return

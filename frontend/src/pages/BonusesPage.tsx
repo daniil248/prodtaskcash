@@ -227,10 +227,10 @@ export default function BonusesPage() {
 Есть бот, где можно немного заработать на простых заданиях в интернете. Всё без вложений — ничего покупать не нужно. Оплата приходит на карту или по номеру телефона.
 
 Если интересно, вот ссылка: ${url}`
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`
+    const shareUrl = `https://t.me/share/url?url=&text=${encodeURIComponent(text)}`
     const tg = window.Telegram?.WebApp as { openTelegramLink?: (u: string) => void } | undefined
     if (typeof navigator !== 'undefined' && navigator.share) {
-      navigator.share({ url, text, title: 'TaskCash' }).catch(() => {
+      navigator.share({ text, title: 'TaskCash' }).catch(() => {
         if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl)
         else window.open(shareUrl, '_blank')
       })

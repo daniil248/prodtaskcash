@@ -77,11 +77,6 @@ const STEPS: Record<string, { step1: string; step2: string; btn1: string }> = {
     step2: 'После подписки нажмите «Проверить».',
     btn1: 'Перейти на канал',
   },
-  like: {
-    step1: 'Перейдите по ссылке и поставьте лайк на пост.',
-    step2: 'После лайка нажмите «Проверить».',
-    btn1: 'Перейти к посту',
-  },
   watch_ad: {
     step1: 'Просмотрите 2 рекламных видео',
     step2: 'После просмотра 2 рекламных видео нажмите на «Проверить» для проверки',
@@ -91,6 +86,16 @@ const STEPS: Record<string, { step1: string; step2: string; btn1: string }> = {
     step1: 'Поделитесь реферальной ссылкой с другом',
     step2: 'Друг должен зарегистрироваться и выполнить 3 задания',
     btn1: 'Перейти',
+  },
+  start_bot: {
+    step1: 'Перейдите по ссылке и запустите бота (нажмите «Start»).',
+    step2: 'После запуска нажмите «Проверить» — награда будет начислена.',
+    btn1: 'Запустить бота',
+  },
+  referral_goal: {
+    step1: 'Откройте вкладку «Бонусы» → блок «Рефералы» и скопируйте свою пригласительную ссылку.',
+    step2: 'Поделитесь ей с друзьями. Когда они зарегистрируются и выполнят задания — возвращайтесь сюда и жмите «Забрать».',
+    btn1: 'Перейти в «Бонусы»',
   },
 }
 
@@ -106,6 +111,7 @@ export default function TaskDetailPage() {
   const [adStarted, setAdStarted] = useState(false)
   const [errorMsg, setErrorMsg]   = useState<string | null>(null)
   const [expiresCountdown, setExpiresCountdown] = useState<string | null>(null)
+  const [timerRemaining, setTimerRemaining] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pollRef  = useRef<ReturnType<typeof setInterval> | null>(null)
   const adDuration = useRef<number>(0)
@@ -114,6 +120,29 @@ export default function TaskDetailPage() {
     if (timerRef.current) clearInterval(timerRef.current)
     if (pollRef.current)  clearInterval(pollRef.current)
   }, [])
+
+  // Countdown for simulation-with-timer: first_checked_at + timer_hours - now
+  useEffect(() => {
+    if (!task?.user_first_checked_at || !task?.timer_hours || !task?.has_timer) {
+      setTimerRemaining(null)
+      return
+    }
+    if (task.user_status !== 'checking') {
+      setTimerRemaining(null)
+      return
+    }
+    const tick = () => {
+      const payoutAt = new Date(task.user_first_checked_at!).getTime() + (task.timer_hours! * 3600 * 1000)
+      const diff = payoutAt - Date.now()
+      if (diff <= 0) { setTimerRemaining('Выплата вот-вот начислится'); return }
+      const h = Math.floor(diff / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      setTimerRemaining(h > 0 ? `Награда через ${h} ч ${m} мин` : `Награда через ${m} мин`)
+    }
+    tick()
+    const id = setInterval(tick, 30000)
+    return () => clearInterval(id)
+  }, [task?.user_first_checked_at, task?.timer_hours, task?.has_timer, task?.user_status])
 
   // Countdown from task's expires_at (for non-watch_ad in_progress tasks)
   useEffect(() => {
@@ -217,6 +246,10 @@ export default function TaskDetailPage() {
       if (task.task_type === 'watch_ad' && task.external_url) {
         window.open(task.external_url, '_blank')
       }
+      if (task.task_type === 'referral_goal') {
+        // Для milestone-задания отправляем юзера на страницу Бонусов — там у него есть реферальная ссылка
+        navigate('/bonuses')
+      }
     } catch (err: unknown) {
       showToast(getApiErrorMessage(err), 'error')
     } finally { setLoading(false) }
@@ -236,7 +269,7 @@ export default function TaskDetailPage() {
         setErrorMsg(data.message)
         showToast(data.message, 'error')
       }
-      // st === 'checking' — для watch_ad/invite; подписка/лайк приходят сразу completed/failed
+      // st === 'checking' — для watch_ad/invite; остальные приходят сразу completed/failed
     } catch (err: unknown) {
       const msg = getApiErrorMessage(err)
       setErrorMsg(msg)
@@ -303,7 +336,7 @@ export default function TaskDetailPage() {
         {/* Header: close button top-right */}
         <div style={{ padding: '16px 16px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <h1 style={{ fontSize: 18, fontWeight: 700, color: '#02020E', lineHeight: 1.3, flex: 1 }}>
-            {{ subscribe: 'Подписаться на канал', like: 'Поставить лайк на пост', watch_ad: 'Просмотр рекламы', invite: 'Пригласить друга' }[task.task_type] || task.title}
+            {{ subscribe: 'Подписаться на канал', watch_ad: 'Просмотр рекламы', invite: 'Пригласить друга', start_bot: 'Запустить бота', referral_goal: 'Пригласи друзей' }[task.task_type] || task.title}
           </h1>
           <CloseBtn onClose={() => navigate('/tasks')} />
         </div>
@@ -406,9 +439,11 @@ export default function TaskDetailPage() {
                   <path d="M6 2v6l4 4-4 4v6h12v-6l-4-4 4-4V2H6zm10 14.5V20H8v-3.5l4-4 4 4zm-4-5-4-4V4h8v3.5l-4 4z" fill="#8B6200"/>
                 </svg>
                 <p style={{ fontSize: 12, color: '#8B6200', lineHeight: 1.4 }}>
-                  {isChecking
-                    ? 'Проверяем выполнение задания, подождите...'
-                    : 'Задание выполняется, ожидайте проверки'}
+                  {isChecking && timerRemaining
+                    ? timerRemaining
+                    : isChecking
+                      ? 'Проверяем выполнение задания, подождите...'
+                      : 'Задание выполняется, ожидайте проверки'}
                 </p>
               </div>
 
@@ -455,7 +490,7 @@ export default function TaskDetailPage() {
                 >
                   {loading
                     ? <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }}/>
-                    : 'Проверить'}
+                    : task.task_type === 'referral_goal' ? 'Забрать' : 'Проверить'}
                 </button>
               ) : isProgress && task.task_type === 'watch_ad' && timeLeft > 0 ? (
                 <button disabled style={{
@@ -480,7 +515,7 @@ export default function TaskDetailPage() {
                 >
                   {loading
                     ? <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', borderTopColor: '#fff' }}/>
-                    : 'Проверить'}
+                    : task.task_type === 'referral_goal' ? 'Забрать' : 'Проверить'}
                 </button>
               ) : null}
 

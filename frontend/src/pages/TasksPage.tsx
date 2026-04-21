@@ -93,14 +93,12 @@ function useCountdown(expiresAt: string | null) {
 // Character illustration per task type (3D renders in /chars/)
 const CHAR_IMGS: Record<string, string> = {
   subscribe: '/chars/subscribe.png',
-  like:      '/chars/like.png',
   watch_ad:  '/chars/watch_ad.png',
   invite:    '/chars/invite.png',
 }
 // Card image area bg tints per type
 const TYPE_BG: Record<string, string> = {
   subscribe: '#FFF0F0',
-  like:      '#FFF0F6',
   watch_ad:  '#FFF5E6',
   invite:    '#F0F5FF',
 }
@@ -150,14 +148,14 @@ function CardImage({ task, greyed }: { task: Task; greyed?: boolean }) {
         <img src={charImg} alt="" style={{ width: 87, height: 87, objectFit: 'contain', objectPosition: 'center center', filter: greyed ? 'grayscale(0.5) opacity(0.7)' : 'none' }}/>
       ) : (
         <span style={{ fontSize: 32 }}>
-          {{ subscribe: '📢', like: '❤️', watch_ad: '▶️', invite: '🤝' }[task.task_type] || '🎯'}
+          {{ subscribe: '📢', watch_ad: '▶️', invite: '🤝', start_bot: '🤖', referral_goal: '🤝' }[task.task_type] || '🎯'}
         </span>
       )}
     </div>
   )
 }
 
-function TaskCardItem({ task, onClick, onCancelSuccess }: { task: Task; onClick: () => void; onCancelSuccess?: () => void }) {
+function TaskCardItem({ task, onClick, onCancelSuccess, activeReferrals }: { task: Task; onClick: () => void; onCancelSuccess?: () => void; activeReferrals?: number }) {
   const isDone     = task.user_status === 'completed'
   const isChecking = task.user_status === 'checking'
   const isProgress = task.user_status === 'in_progress'
@@ -417,6 +415,13 @@ function TaskCardItem({ task, onClick, onCancelSuccess }: { task: Task; onClick:
             </p>
           )}
 
+          {/* referral_goal: прогресс активных рефералов */}
+          {task.task_type === 'referral_goal' && task.required_referrals && (
+            <p style={{ fontSize: 11, color: '#4D536D', marginTop: 1 }}>
+              Приведено: {Math.min(activeReferrals ?? 0, task.required_referrals)} из {task.required_referrals}
+            </p>
+          )}
+
           {/* done group: timer row (left) + small button (right) */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
             {/* Timer icon + duration — material-symbols:timer-outline-rounded green */}
@@ -498,10 +503,10 @@ function BannerSlide({ task }: { task: Task | null }) {
       style={{
         minWidth: slideWidth,
         maxWidth: slideWidth,
-        height: 150,
+        minHeight: 150,
         borderRadius: 12,
         background: 'linear-gradient(160deg, #00C7D3 0%, #1A44C2 100%)',
-        padding: '16px 18px',
+        padding: '14px 18px',
         cursor: task ? 'pointer' : 'default',
         flexShrink: 0,
         position: 'relative',
@@ -510,7 +515,7 @@ function BannerSlide({ task }: { task: Task | null }) {
         boxSizing: 'border-box',
         display: 'flex',
         flexDirection: 'column',
-        gap: 16,
+        gap: 10,
         justifyContent: 'flex-start',
       }}
     >
@@ -632,9 +637,10 @@ function NewsBanner({ tasks }: { tasks: Task[] }) {
 
 // ─── Main page ─────────────────────────────────────────────────────────────────
 const TYPE_FILTERS: { key: TaskType | ''; label: string }[] = [
-  { key: '',          label: 'Все' },
-  { key: 'subscribe', label: '📢 Подписка' },
-  { key: 'like',      label: '❤️ Лайк' },
+  { key: '',              label: 'Все' },
+  { key: 'subscribe',     label: '📢 Подписка' },
+  { key: 'start_bot',     label: '🤖 Старт бота' },
+  { key: 'referral_goal', label: '🤝 Поделиться' },
 ]
 
 export default function TasksPage() {
@@ -650,6 +656,7 @@ export default function TasksPage() {
   const [totalPages, setTotalPages] = useState(1)
   const [onlineCount, setOnlineCount] = useState(0)
   const [bannerTaskIds, setBannerTaskIds] = useState<number[]>([])
+  const [activeReferrals, setActiveReferrals] = useState(0)
 
   const allTasksRef = useRef<Task[]>([])
   const level = calcLevel(parseFloat(user?.total_earned ?? '0'))
@@ -668,6 +675,7 @@ export default function TasksPage() {
       setTasks([...allTasksRef.current], data.completed_today)
       setPage(data.page)
       setTotalPages(data.pages)
+      if (typeof data.active_referrals === 'number') setActiveReferrals(data.active_referrals)
     } finally {
       setLoading(false)
       setLoadingMore(false)
@@ -945,6 +953,7 @@ export default function TasksPage() {
               <TaskCardItem
                 key={task.id}
                 task={task}
+                activeReferrals={activeReferrals}
                 onClick={() => navigate(`/tasks/${task.id}`)}
                 onCancelSuccess={() => load(sort, typeFilter, 1)}
               />

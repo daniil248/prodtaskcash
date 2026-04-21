@@ -57,8 +57,8 @@ async def list_tasks(
         (Task.expires_at == None) | (Task.expires_at > now),
         # Budget: hide tasks where total completions >= max_completions
         (Task.max_completions == None) | (Task.total_completions < Task.max_completions),
-        # Только подписка и лайк (invite, watch_ad убраны из выдачи)
-        Task.task_type.in_([TaskType.subscribe, TaskType.like]),
+        # Подписка, старт бота, реферал-цель (invite, watch_ad, like убраны из выдачи)
+        Task.task_type.in_([TaskType.subscribe, TaskType.start_bot, TaskType.referral_goal]),
     )
 
     # Optional task_type filter (только subscribe / like)
@@ -98,10 +98,22 @@ async def list_tasks(
         select(UserTask).where(UserTask.user_id == user.id)
     )
     all_user_tasks = user_tasks_result.scalars().all()
+    # Загружаем связанные Task для проверки has_timer (чтобы не переводить
+    # таймерные задачи в expired после CHECKING_TIMEOUT_SEC — у них статус
+    # checking может длиться timer_hours часов до Celery-отработки).
+    ut_task_ids = {ut.task_id for ut in all_user_tasks}
+    if ut_task_ids:
+        r = await db.execute(select(Task).where(Task.id.in_(ut_task_ids)))
+        tasks_for_ut = {t.id: t for t in r.scalars().all()}
+    else:
+        tasks_for_ut = {}
     # «Вечная проверка»: если статус checking дольше CHECKING_TIMEOUT_SEC — помечаем как expired
     stale_updated = False
     for ut in all_user_tasks:
         if ut.status == UserTaskStatus.checking and ut.started_at:
+            t_for_ut = tasks_for_ut.get(ut.task_id)
+            if t_for_ut and t_for_ut.has_timer:
+                continue  # таймерные — не трогаем
             started = ut.started_at.replace(tzinfo=timezone.utc) if ut.started_at.tzinfo is None else ut.started_at
             if (now - started).total_seconds() > CHECKING_TIMEOUT_SEC:
                 ut.status = UserTaskStatus.expired
@@ -130,6 +142,7 @@ async def list_tasks(
         schema = TaskSchema.model_validate(task)
         schema.user_status = ut.status if ut else None
         schema.user_task_id = ut.id if ut else None
+        schema.user_first_checked_at = ut.first_checked_at if ut else None
         # Count how many times user completed this task today
         today_comps = sum(
             1 for u in user_tasks_by_task.get(task.id, [])
@@ -141,12 +154,20 @@ async def list_tasks(
         result.append(schema)
 
     pages = max(1, (total + page_size - 1) // page_size)
+
+    # Прогресс по referral_goal — общий для пользователя (не зависит от задания)
+    active_refs = 0
+    if any(t.task_type == TaskType.referral_goal for t in tasks):
+        from app.services.referral import count_active_referrals
+        active_refs = await count_active_referrals(db, user.id)
+
     return TaskListResponse(
         tasks=result,
         completed_today=completed_today,
         total=total,
         page=page,
         pages=pages,
+        active_referrals=active_refs,
     )
 
 
@@ -157,7 +178,8 @@ async def get_task_status(
     user: User = Depends(get_current_user),
 ):
     task_result = await db.execute(select(Task).where(Task.id == task_id))
-    if not task_result.scalar_one_or_none():
+    task_obj = task_result.scalar_one_or_none()
+    if not task_obj:
         raise HTTPException(status_code=404, detail="Задание не найдено")
     ut_result = await db.execute(
         select(UserTask).where(
@@ -171,6 +193,10 @@ async def get_task_status(
     now = datetime.now(timezone.utc)
     for ut in uts:
         if ut.status == UserTaskStatus.checking and ut.started_at:
+            # Для задач с таймером (subscribe is_simulation+has_timer) статус checking
+            # сохраняется timer_hours часов до отработки subscribe_timer_pay.
+            if task_obj.has_timer:
+                continue
             started = ut.started_at.replace(tzinfo=timezone.utc) if ut.started_at.tzinfo is None else ut.started_at
             if (now - started).total_seconds() > CHECKING_TIMEOUT_SEC:
                 ut.status = UserTaskStatus.expired
@@ -208,9 +234,10 @@ async def start_task(
         raise HTTPException(status_code=400, detail=reason)
 
     expires_at = None
-    if task.task_type in (TaskType.subscribe, TaskType.like):
-        # Окно на подписку/лайк + нажатие «Проверить»: 10 минут (бот успеет проверить)
+    if task.task_type in (TaskType.subscribe, TaskType.like, TaskType.start_bot):
+        # Окно на подписку/лайк/старт бота + нажатие «Проверить»: 10 минут
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    # referral_goal: без expires_at — пользователь может забрать в любой момент
     elif task.duration_seconds:
         # watch_ad: время просмотра + буфер
         expires_at = datetime.now(timezone.utc) + timedelta(seconds=task.duration_seconds + 30)
@@ -296,18 +323,57 @@ async def check_task(
                 message=user_task.error_message,
             )
 
-    # Подписка и лайк: проверяем сразу в запросе (без Celery), всегда возвращаем 200 с результатом
-    if task.task_type in (TaskType.subscribe, TaskType.like):
+    # Подписка / лайк / старт бота / реферал-цель: проверяем сразу в запросе (без Celery), всегда возвращаем 200 с результатом
+    if task.task_type in (TaskType.subscribe, TaskType.like, TaskType.start_bot, TaskType.referral_goal):
         from app.services.task_verification import (
             run_verification,
             apply_verification_result,
         )
-        from app.services.referral import try_give_referral_reward
+        from app.services.referral import try_give_referral_reward, count_active_referrals
         from app.workers.tasks import _send_notification_async, subscribe_timer_second_check, subscribe_timer_pay
 
         now = datetime.now(timezone.utc)
         started = user_task.started_at.replace(tzinfo=timezone.utc)
         elapsed_sec = (now - started).total_seconds()
+
+        # Referral goal: считаем активных рефералов, выплата когда порог достигнут
+        if task.task_type == TaskType.referral_goal:
+            required = task.required_referrals or 0
+            active = await count_active_referrals(db, user.id)
+            if active < required:
+                user_task.status = UserTaskStatus.failed
+                user_task.error_message = f"Приведено {active} из {required} — приведи ещё {required - active}"
+                await db.commit()
+                return CheckTaskResponse(
+                    status=UserTaskStatus.failed,
+                    message=user_task.error_message,
+                )
+            await apply_verification_result(db, task, user_task, user, True, "Цель достигнута")
+            await db.commit()
+            try:
+                await _send_notification_async(
+                    user.telegram_id,
+                    f"✅ <b>Задание выполнено!</b>\n\n«{task.title}»\n\n💰 Начислено: <b>+{float(task.reward):.0f}₽</b>\nВаш баланс: <b>{float(user.balance):.2f}₽</b>",
+                    "tasks",
+                )
+            except Exception as e:
+                log.warning("check_task: notification failed: %s", e)
+            return CheckTaskResponse(status=UserTaskStatus.completed, message="Выплата начислена")
+
+        # Старт бота: всегда имитация — мгновенная выплата после нажатия «Проверить»
+        if task.task_type == TaskType.start_bot:
+            await apply_verification_result(db, task, user_task, user, True, "Старт бота")
+            await db.commit()
+            try:
+                await try_give_referral_reward(db, user)
+                await _send_notification_async(
+                    user.telegram_id,
+                    f"✅ <b>Задание выполнено!</b>\n\n«{task.title}»\n\n💰 Начислено: <b>+{float(task.reward):.0f}₽</b>\nВаш баланс: <b>{float(user.balance):.2f}₽</b>",
+                    "tasks",
+                )
+            except Exception as e:
+                log.warning("check_task: notification/referral failed: %s", e)
+            return CheckTaskResponse(status=UserTaskStatus.completed, message="Выплата начислена")
 
         # Подписка: имитация без таймера — сразу выплата без проверки
         if task.task_type == TaskType.subscribe and getattr(task, "is_simulation", False) and not getattr(task, "has_timer", False):
@@ -447,7 +513,7 @@ async def cancel_task(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Отмена задания: разрешена в статусе in_progress и checking."""
+    """Отмена задания: разрешена в статусе in_progress и checking. Отменяются все активные записи на это задание."""
     ut_result = await db.execute(
         select(UserTask).where(
             UserTask.user_id == user.id,
@@ -455,10 +521,11 @@ async def cancel_task(
             UserTask.status.in_([UserTaskStatus.in_progress, UserTaskStatus.checking]),
         )
     )
-    user_task = ut_result.scalar_one_or_none()
-    if not user_task:
+    user_tasks = ut_result.scalars().all()
+    if not user_tasks:
         raise HTTPException(status_code=404, detail="Активное задание не найдено")
 
-    user_task.status = UserTaskStatus.expired
+    for ut in user_tasks:
+        ut.status = UserTaskStatus.expired
     await db.commit()
-    return {"ok": True}
+    return {"ok": True, "cancelled": len(user_tasks)}

@@ -61,6 +61,11 @@ const STEPS = {
         step2: 'Друг должен зарегистрироваться и выполнить 3 задания',
         btn1: 'Перейти',
     },
+    start_bot: {
+        step1: 'Перейдите по ссылке и запустите бота (нажмите «Start»).',
+        step2: 'После запуска нажмите «Проверить» — награда будет начислена.',
+        btn1: 'Запустить бота',
+    },
 };
 export default function TaskDetailPage() {
     const { id } = useParams();
@@ -279,7 +284,7 @@ export default function TaskDetailPage() {
                 maxHeight: '90vh',
                 overflowY: 'auto',
                 boxShadow: '0 20px 60px rgba(2,2,14,0.3)',
-            }, onClick: (e) => e.stopPropagation(), children: [_jsxs("div", { style: { padding: '16px 16px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }, children: [_jsx("h1", { style: { fontSize: 18, fontWeight: 700, color: '#02020E', lineHeight: 1.3, flex: 1 }, children: { subscribe: 'Подписаться на канал', like: 'Поставить лайк на пост', watch_ad: 'Просмотр рекламы', invite: 'Пригласить друга' }[task.task_type] || task.title }), _jsx(CloseBtn, { onClose: () => navigate('/tasks') })] }), _jsxs("div", { style: { padding: '14px 16px 16px' }, children: [!status && !isDone && (_jsxs(_Fragment, { children: [_jsx("div", { style: { background: '#fff', borderRadius: 12, border: '1px solid #EEECF9', padding: '14px 16px', marginBottom: 2 }, children: _jsxs("div", { style: { display: 'flex', alignItems: 'flex-start', gap: 12 }, children: [_jsx(StepCircle, { n: 1 }), _jsx("p", { style: { fontSize: 14, color: '#02020E', lineHeight: 1.4, flex: 1, paddingTop: 5 }, children: task.instruction ? task.instruction.split('\n')[0] || stepCfg.step1 : stepCfg.step1 })] }) }), _jsx("div", { style: { display: 'flex', justifyContent: 'flex-start', paddingLeft: 32, marginBottom: 2 }, children: _jsx("div", { style: { width: 2, height: 10, background: '#EEECF9', borderRadius: 1 } }) }), _jsx("button", { onClick: handleStart, disabled: loading, style: {
+            }, onClick: (e) => e.stopPropagation(), children: [_jsxs("div", { style: { padding: '16px 16px 0', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }, children: [_jsx("h1", { style: { fontSize: 18, fontWeight: 700, color: '#02020E', lineHeight: 1.3, flex: 1 }, children: { subscribe: 'Подписаться на канал', like: 'Поставить лайк на пост', watch_ad: 'Просмотр рекламы', invite: 'Пригласить друга', start_bot: 'Запустить бота' }[task.task_type] || task.title }), _jsx(CloseBtn, { onClose: () => navigate('/tasks') })] }), _jsxs("div", { style: { padding: '14px 16px 16px' }, children: [!status && !isDone && (_jsxs(_Fragment, { children: [_jsx("div", { style: { background: '#fff', borderRadius: 12, border: '1px solid #EEECF9', padding: '14px 16px', marginBottom: 2 }, children: _jsxs("div", { style: { display: 'flex', alignItems: 'flex-start', gap: 12 }, children: [_jsx(StepCircle, { n: 1 }), _jsx("p", { style: { fontSize: 14, color: '#02020E', lineHeight: 1.4, flex: 1, paddingTop: 5 }, children: task.instruction ? task.instruction.split('\n')[0] || stepCfg.step1 : stepCfg.step1 })] }) }), _jsx("div", { style: { display: 'flex', justifyContent: 'flex-start', paddingLeft: 32, marginBottom: 2 }, children: _jsx("div", { style: { width: 2, height: 10, background: '#EEECF9', borderRadius: 1 } }) }), _jsx("button", { onClick: handleStart, disabled: loading, style: {
                                         width: '100%', height: 40, borderRadius: 20, border: 'none',
                                         background: loading ? GREY : GRAD,
                                         color: '#fff', fontSize: 15, fontWeight: 700,

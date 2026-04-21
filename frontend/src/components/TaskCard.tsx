@@ -5,17 +5,19 @@ const GRAD = 'linear-gradient(135deg, #35DE66 43%, #2CE1A1 58%, #02BBC7 100%)'
 
 // Type icon paths from SVG (task_subscribtion.svg, task_like.svg, task_ADS.svg)
 const TYPE_COLORS: Record<string, string> = {
-  subscribe: '#1A44C2',
-  like:      '#FE5A5B',
-  watch_ad:  '#FA8D28',
-  invite:    '#23C366',
+  subscribe:     '#1A44C2',
+  watch_ad:      '#FA8D28',
+  invite:        '#23C366',
+  start_bot:     '#7B61FF',
+  referral_goal: '#23C366',
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  subscribe: 'Подписка',
-  like:      'Лайк',
-  watch_ad:  'Реклама',
-  invite:    'Приглашение',
+  subscribe:     'Подписка',
+  watch_ad:      'Реклама',
+  invite:        'Приглашение',
+  start_bot:     'Запуск бота',
+  referral_goal: 'Поделиться',
 }
 
 // SVG icon paths extracted directly from task_subscribtion.svg / task_like.svg / task_ADS.svg
@@ -30,21 +32,34 @@ function TypeIcon({ type }: { type: string }) {
       </svg>
     )
   }
-  if (type === 'like') {
-    // Heart icon
-    return (
-      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-        <circle cx="14" cy="14" r="14" fill="#FFEDED"/>
-        <path d="M14 20s-7-4.35-7-8.5A4.5 4.5 0 0 1 14 9.1 4.5 4.5 0 0 1 21 11.5C21 15.65 14 20 14 20Z" fill={color}/>
-      </svg>
-    )
-  }
   if (type === 'watch_ad') {
     // Play circle icon
     return (
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
         <circle cx="14" cy="14" r="14" fill="#FFF3E0"/>
         <path d="M11 10l9 4-9 4V10Z" fill={color}/>
+      </svg>
+    )
+  }
+  if (type === 'start_bot') {
+    // Robot icon (bot)
+    return (
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <circle cx="14" cy="14" r="14" fill="#EEEAFF"/>
+        <rect x="8" y="10" width="12" height="10" rx="2" stroke={color} strokeWidth="1.8"/>
+        <circle cx="11.5" cy="14.5" r="1.2" fill={color}/>
+        <circle cx="16.5" cy="14.5" r="1.2" fill={color}/>
+        <path d="M14 7v3" stroke={color} strokeWidth="1.8" strokeLinecap="round"/>
+        <circle cx="14" cy="6.5" r="1" fill={color}/>
+      </svg>
+    )
+  }
+  if (type === 'referral_goal') {
+    // Handshake / people icon
+    return (
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <circle cx="14" cy="14" r="14" fill="#E2F3EE"/>
+        <path d="M10 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM18 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM16 22v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M20 16h-1a4 4 0 0 0-2 0.5M20 22v-2a4 4 0 0 0-4-4" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     )
   }

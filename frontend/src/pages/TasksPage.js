@@ -97,7 +97,7 @@ function CardImage({ task, greyed }) {
             borderRadius: '12px 0 0 12px',
             overflow: 'hidden',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }, children: task.icon_url ? (_jsx("img", { src: task.icon_url, alt: "", style: { width: 87, height: 80, objectFit: 'cover' } })) : charImg ? (_jsx("img", { src: charImg, alt: "", style: { width: 87, height: 87, objectFit: 'contain', objectPosition: 'center center', filter: greyed ? 'grayscale(0.5) opacity(0.7)' : 'none' } })) : (_jsx("span", { style: { fontSize: 32 }, children: { subscribe: '📢', like: '❤️', watch_ad: '▶️', invite: '🤝' }[task.task_type] || '🎯' })) }));
+        }, children: task.icon_url ? (_jsx("img", { src: task.icon_url, alt: "", style: { width: 87, height: 80, objectFit: 'cover' } })) : charImg ? (_jsx("img", { src: charImg, alt: "", style: { width: 87, height: 87, objectFit: 'contain', objectPosition: 'center center', filter: greyed ? 'grayscale(0.5) opacity(0.7)' : 'none' } })) : (_jsx("span", { style: { fontSize: 32 }, children: { subscribe: '📢', like: '❤️', watch_ad: '▶️', invite: '🤝', start_bot: '🤖' }[task.task_type] || '🎯' })) }));
 }
 function TaskCardItem({ task, onClick, onCancelSuccess }) {
     const isDone = task.user_status === 'completed';
@@ -291,10 +291,10 @@ function BannerSlide({ task }) {
     return (_jsxs("div", { onClick: () => task && navigate(`/tasks/${task.id}`), style: {
             minWidth: slideWidth,
             maxWidth: slideWidth,
-            height: 150,
+            minHeight: 150,
             borderRadius: 12,
             background: 'linear-gradient(160deg, #00C7D3 0%, #1A44C2 100%)',
-            padding: '16px 18px',
+            padding: '14px 18px',
             cursor: task ? 'pointer' : 'default',
             flexShrink: 0,
             position: 'relative',
@@ -303,7 +303,7 @@ function BannerSlide({ task }) {
             boxSizing: 'border-box',
             display: 'flex',
             flexDirection: 'column',
-            gap: 16,
+            gap: 10,
             justifyContent: 'flex-start',
         }, children: [_jsx("div", { style: { position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(63,227,169,0.35) 0%, rgba(21,202,224,0.20) 60%, transparent 100%)', pointerEvents: 'none' } }), _jsx("p", { style: { position: 'relative', fontSize: 14, fontWeight: 800, color: '#fff', letterSpacing: 0.5, textTransform: 'uppercase', margin: 0 }, children: budgetLabel }), _jsx("p", { style: { position: 'relative', fontSize: 18, fontWeight: 700, color: '#fff', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', margin: 0 }, children: task?.title || 'Новые задания уже ждут вас' }), _jsx("div", { style: {
                     position: 'relative',
@@ -372,6 +372,7 @@ const TYPE_FILTERS = [
     { key: '', label: 'Все' },
     { key: 'subscribe', label: '📢 Подписка' },
     { key: 'like', label: '❤️ Лайк' },
+    { key: 'start_bot', label: '🤖 Старт бота' },
 ];
 export default function TasksPage() {
     const navigate = useNavigate();

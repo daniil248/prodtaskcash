@@ -83,11 +83,14 @@ class TaskSchema(BaseModel):
     has_timer: bool = False
     timer_hours: int | None = None
     is_simulation: bool = False
+    required_referrals: int | None = None
     # These are set per-request (not from DB directly)
     user_status: UserTaskStatus | None = None
     user_task_id: int | None = None
     error_message: str | None = None
     user_today_completions: int = 0
+    # Для subscribe + is_simulation + has_timer: когда стартовал таймер — чтобы фронт мог показать оставшееся время
+    user_first_checked_at: datetime | None = None
 
 
 class TaskListResponse(BaseModel):
@@ -96,6 +99,7 @@ class TaskListResponse(BaseModel):
     total: int
     page: int
     pages: int
+    active_referrals: int = 0
 
 
 class StartTaskResponse(BaseModel):
@@ -232,6 +236,7 @@ class TaskCreateRequest(BaseModel):
     has_timer: bool = False
     timer_hours: int | None = None
     is_simulation: bool = False
+    required_referrals: int | None = None
 
 
 class TaskUpdateRequest(TaskCreateRequest):

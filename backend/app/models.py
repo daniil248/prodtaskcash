@@ -14,6 +14,8 @@ class TaskType(str, enum.Enum):
     like = "like"
     watch_ad = "watch_ad"
     invite = "invite"
+    start_bot = "start_bot"
+    referral_goal = "referral_goal"
 
 
 class UserTaskStatus(str, enum.Enum):
@@ -116,6 +118,8 @@ class Task(Base):
     timer_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Имитация: бот не проверяет, только выплата (если бота нет в админах канала и т.п.)
     is_simulation: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Referral goal: порог активных рефералов для выплаты (только для task_type=referral_goal)
+    required_referrals: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     user_tasks: Mapped[list["UserTask"]] = relationship("UserTask", back_populates="task")
 

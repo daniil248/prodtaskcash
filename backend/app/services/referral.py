@@ -74,6 +74,28 @@ async def get_referral_stats(db: AsyncSession, user: User) -> dict:
     }
 
 
+async def count_active_referrals(db: AsyncSession, user_id: int) -> int:
+    """Количество активных (не забаненных, выполнивших >= referral_min_tasks заданий) рефералов."""
+    min_tasks = int(await _get_sys_value(db, "referral_min_tasks", settings.REFERRAL_MIN_TASKS))
+    completed_subq = (
+        select(UserTask.user_id, func.count(UserTask.id).label("cnt"))
+        .where(UserTask.status == UserTaskStatus.completed)
+        .group_by(UserTask.user_id)
+        .subquery()
+    )
+    result = await db.execute(
+        select(func.count(User.id))
+        .select_from(User)
+        .join(completed_subq, completed_subq.c.user_id == User.id, isouter=True)
+        .where(
+            User.referrer_id == user_id,
+            User.is_banned == False,
+            func.coalesce(completed_subq.c.cnt, 0) >= min_tasks,
+        )
+    )
+    return int(result.scalar() or 0)
+
+
 async def _referral_earnings(db: AsyncSession, referrer_id: int, referral_id: int) -> Decimal:
     result = await db.execute(
         select(func.sum(Transaction.amount)).where(

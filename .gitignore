@@ -28,3 +28,16 @@ Thumbs.db
 # Логи и временные файлы
 *.log
 .cache/
+
+# Отладочные и одноразовые деплой-скрипты (содержат креды прода)
+check_*.py
+debug_*.py
+diagnose_*.py
+fix_*.py
+deploy_broadcast_fix.py
+deploy_frontend.py
+deploy_referral_goal.py
+deploy_start_bot.py
+test_referral_goal*.py
+test_ssh.py
+

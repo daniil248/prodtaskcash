@@ -25,6 +25,7 @@ interface Task {
   has_timer?: boolean
   timer_hours?: number | null
   is_simulation?: boolean
+  required_referrals?: number | null
 }
 
 const EMPTY_FORM: Omit<Task, 'id' | 'total_completions' | 'created_at'> = {
@@ -48,13 +49,15 @@ const EMPTY_FORM: Omit<Task, 'id' | 'total_completions' | 'created_at'> = {
   has_timer: false,
   timer_hours: null,
   is_simulation: false,
+  required_referrals: null,
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  subscribe: '📢 Подписка',
-  like:      '👍 Лайк',
-  watch_ad:  '📺 Реклама',
-  invite:    '👥 Приглашение',
+  subscribe:     '📢 Подписка',
+  watch_ad:      '📺 Реклама',
+  invite:        '👥 Приглашение',
+  start_bot:     '🤖 Старт бота',
+  referral_goal: '🤝 Пригласи друзей',
 }
 
 // Which fields are required/relevant per task type
@@ -63,10 +66,6 @@ const TYPE_HINTS: Record<string, { fields: string[]; notes: string }> = {
     fields: ['external_url', 'channel_id'],
     notes: 'Укажите ссылку на канал и @username или ID канала (для проверки подписки)',
   },
-  like: {
-    fields: ['external_url', 'channel_id'],
-    notes: 'Ссылка на пост (ID поста возьмётся из неё), @username или ID канала для проверки',
-  },
   watch_ad: {
     fields: ['external_url', 'duration_seconds'],
     notes: 'Укажите ссылку на видео/рекламу и минимальное время просмотра в секундах',
@@ -74,6 +73,14 @@ const TYPE_HINTS: Record<string, { fields: string[]; notes: string }> = {
   invite: {
     fields: [],
     notes: 'Задание выполняется когда пользователь приглашает реферала. Ссылка не нужна.',
+  },
+  start_bot: {
+    fields: ['external_url'],
+    notes: 'Ссылка на бота (t.me/SomeBot или t.me/SomeBot?start=xxx). Проверка — имитация: пользователь жмёт «Начать», ссылка открывается, затем «Проверить» — выплата начисляется сразу.',
+  },
+  referral_goal: {
+    fields: ['required_referrals'],
+    notes: 'Задание на приглашение друзей. Укажите сколько активных рефералов нужно привести. Активный = выполнил минимум N заданий (настройка referral_min_tasks). Когда порог достигнут, пользователь жмёт «Забрать» и получает награду. Одноразовое на пользователя.',
   },
 }
 
@@ -131,6 +138,7 @@ export default function TasksAdminPage() {
       has_timer:        t.has_timer ?? false,
       timer_hours:      t.timer_hours ?? null,
       is_simulation:    t.is_simulation ?? false,
+      required_referrals: t.required_referrals ?? null,
     })
     setError('')
     setShowModal(true)
@@ -139,6 +147,9 @@ export default function TasksAdminPage() {
   const handleSave = async () => {
     if (!form.title.trim()) { setError('Название обязательно'); return }
     if (!form.reward || isNaN(parseFloat(String(form.reward)))) { setError('Укажите корректную награду'); return }
+    if (form.task_type === 'referral_goal' && (!form.required_referrals || form.required_referrals < 1)) {
+      setError('Укажите количество рефералов (минимум 1)'); return
+    }
 
     setSaving(true)
     setError('')
@@ -163,7 +174,8 @@ export default function TasksAdminPage() {
         expires_at:       form.expires_at || null,
         has_timer:        form.task_type === 'subscribe' ? !!form.has_timer : false,
         timer_hours:     form.task_type === 'subscribe' && form.has_timer && form.timer_hours != null ? parseInt(String(form.timer_hours)) : null,
-        is_simulation:    form.task_type === 'subscribe' ? !!form.is_simulation : false,
+        is_simulation:    form.task_type === 'subscribe' ? !!form.is_simulation : (form.task_type === 'start_bot' ? true : false),
+        required_referrals: form.task_type === 'referral_goal' && form.required_referrals != null ? parseInt(String(form.required_referrals)) : null,
       }
       if (editing) {
         await adminApi.updateTask(editing.id, payload)
@@ -381,7 +393,8 @@ export default function TasksAdminPage() {
                 style={{ marginBottom: 0 }}
               >
                 <option value="subscribe">📢 Подписка на канал</option>
-                <option value="like">👍 Лайк / Реакция на пост</option>
+                <option value="start_bot">🤖 Старт бота</option>
+                <option value="referral_goal">🤝 Пригласи друзей</option>
               </select>
               {/* Hint about required fields */}
               <div style={{
@@ -449,31 +462,48 @@ export default function TasksAdminPage() {
               </div>
             </div>
 
-            {/* Ссылка: для подписки — на канал, для лайка — на пост (ID поста берётся из ссылки) */}
-            <div className="form-group">
-              <label className="form-label">
-                Ссылка для перехода *
-                <span style={{ color: '#FE5A5B' }}> (обязательно)</span>
-              </label>
-              <input
-                type="url"
-                placeholder={form.task_type === 'like' ? 'https://t.me/channel/123 (ссылка на пост)' : 'https://t.me/yourchannel'}
-                value={form.external_url || ''}
-                onChange={(e) => setForm({ ...form, external_url: e.target.value || null })}
-              />
-              {form.task_type === 'like' && (
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                  Укажите ссылку на пост в канале — ID поста подставится из неё автоматически
-                </div>
-              )}
-            </div>
+            {/* Ссылка: для подписки — на канал, для старт-бота — на бота */}
+            {form.task_type !== 'referral_goal' && (
+              <div className="form-group">
+                <label className="form-label">
+                  Ссылка для перехода *
+                  <span style={{ color: '#FE5A5B' }}> (обязательно)</span>
+                </label>
+                <input
+                  type="url"
+                  placeholder={form.task_type === 'start_bot' ? 'https://t.me/SomeBot?start=xxx' : 'https://t.me/yourchannel'}
+                  value={form.external_url || ''}
+                  onChange={(e) => setForm({ ...form, external_url: e.target.value || null })}
+                />
+              </div>
+            )}
 
-            {/* Channel ID (for subscribe and like) */}
-            {(form.task_type === 'subscribe' || form.task_type === 'like') && (
+            {/* Referral goal: порог активных рефералов */}
+            {form.task_type === 'referral_goal' && (
+              <div className="form-group">
+                <label className="form-label">
+                  Сколько активных рефералов нужно привести *
+                  <span style={{ color: '#FE5A5B' }}> (обязательно)</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  placeholder="50"
+                  value={form.required_referrals ?? ''}
+                  onChange={(e) => setForm({ ...form, required_referrals: e.target.value ? parseInt(e.target.value) : null })}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                  Активный = реферал выполнил минимум N заданий (порог задаётся в настройках «referral_min_tasks»). Фейковые аккаунты, которые ничего не делали, в счёт не идут.
+                </div>
+              </div>
+            )}
+
+            {/* Channel ID (for subscribe) */}
+            {form.task_type === 'subscribe' && (
               <div className="form-group">
                 <label className="form-label">
                   Канал (username или ссылка) *
-                  <span style={{ color: '#FE5A5B' }}> — для проверки подписки/лайка</span>
+                  <span style={{ color: '#FE5A5B' }}> — для проверки подписки</span>
                 </label>
                 <input
                   type="text"
@@ -537,7 +567,7 @@ export default function TasksAdminPage() {
               </>
             )}
 
-            {/* Duration — не используется (только подписка и лайк) */}
+            {/* Duration — не используется */}
             {false && form.task_type === 'watch_ad' && (
               <div className="form-group">
                 <label className="form-label">
@@ -556,7 +586,8 @@ export default function TasksAdminPage() {
               </div>
             )}
 
-            {/* Budget and limits */}
+            {/* Budget and limits — не показываем для referral_goal (одноразовое milestone-задание) */}
+            {form.task_type !== 'referral_goal' && (
             <div style={{ borderTop: '1px solid #EEECF9', paddingTop: 12, marginTop: 4 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>
                 Лимиты и бюджет
@@ -647,6 +678,7 @@ export default function TasksAdminPage() {
                   </div>
               </div>
             </div>
+            )}
 
             {/* Icon URL (optional) */}
             <div className="form-group">

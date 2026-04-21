@@ -20,5 +20,6 @@ celery_app.conf.update(
         "app.workers.tasks.send_notification": {"queue": "verification"},
         "app.workers.tasks.subscribe_timer_second_check": {"queue": "verification"},
         "app.workers.tasks.subscribe_timer_pay": {"queue": "verification"},
+        "app.workers.tasks.broadcast_send": {"queue": "notifications"},
     },
 )
