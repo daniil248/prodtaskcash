@@ -66,7 +66,33 @@ async def apply_verification_result(
     success: bool,
     message: str,
 ) -> None:
-    """Обновляет user_task, баланс, транзакцию, реферала. Не коммитит и не шлёт уведомления."""
+    """Обновляет user_task, баланс, транзакцию, реферала. Не коммитит и не шлёт уведомления.
+
+    Идемпотентно: если user_task уже завершён (completed/failed) — ничего не делаем.
+    Дополнительно блокирует строки user_task и user через SELECT FOR UPDATE
+    чтобы защититься от race condition (classic lost update) при одновременном
+    срабатывании Celery-таска и API-проверки (такое уже случалось с subscribe_timer_pay).
+    """
+    from sqlalchemy import select as _select
+    # Блокируем user_task и перечитываем актуальный статус
+    locked_ut = (await db.execute(
+        _select(UserTask)
+        .where(UserTask.id == user_task.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )).scalar_one()
+    if locked_ut.status in (UserTaskStatus.completed, UserTaskStatus.failed):
+        log.info(
+            "apply_verification_result: ut_id=%s уже %s, пропускаем (идемпотентность)",
+            locked_ut.id, locked_ut.status,
+        )
+        return
+    # Блокируем пользователя — чтобы balance += reward был атомарным относительно других списаний/начислений
+    (await db.execute(
+        _select(User).where(User.id == user.id).with_for_update()
+        .execution_options(populate_existing=True)
+    )).scalar_one()
+
     if success:
         user_task.status = UserTaskStatus.completed
         user_task.completed_at = datetime.now(timezone.utc)

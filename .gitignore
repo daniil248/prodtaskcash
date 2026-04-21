@@ -35,7 +35,9 @@ debug_*.py
 diagnose_*.py
 fix_*.py
 finalize_*.py
+full_check*.py
 test_*.py
+admin_roundtrip.py
 deploy_broadcast_fix.py
 deploy_frontend.py
 deploy_referral_goal.py
