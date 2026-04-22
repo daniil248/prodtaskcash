@@ -374,6 +374,26 @@ async def list_tasks(db: AsyncSession = Depends(get_db), _: bool = Depends(get_a
     return [TaskSchema.model_validate(t) for t in result.scalars().all()]
 
 
+async def _validate_and_normalize_channel(data: dict) -> None:
+    """Для subscribe/like без is_simulation: проверяем что бот реально видит канал.
+    Модифицирует data['channel_id'] в нормализованный формат."""
+    tt = data.get("task_type")
+    needs_check = tt in (TaskType.subscribe, TaskType.like, "subscribe", "like") and not data.get("is_simulation")
+    if not needs_check:
+        return
+    raw = (data.get("channel_id") or "").strip()
+    if not raw:
+        raise HTTPException(
+            status_code=400,
+            detail="Для подписки/лайка без имитации поле «Канал» обязательно. Укажи @username или -100… (не invite-link).",
+        )
+    from app.services.verification import validate_bot_sees_channel
+    ok, err, resolved = await validate_bot_sees_channel(raw)
+    if not ok:
+        raise HTTPException(status_code=400, detail=err)
+    data["channel_id"] = resolved
+
+
 @router.post("/tasks", response_model=TaskSchema, status_code=201)
 async def create_task(
     body: TaskCreateRequest,
@@ -383,6 +403,7 @@ async def create_task(
     data = body.model_dump()
     if data.get("task_type") == TaskType.like and data.get("external_url") and not data.get("post_id"):
         data["post_id"] = _post_id_from_url(data["external_url"])
+    await _validate_and_normalize_channel(data)
     task = Task(**data)
     db.add(task)
     await db.commit()
@@ -404,6 +425,7 @@ async def update_task(
     data = body.model_dump()
     if task.task_type == TaskType.like and data.get("external_url"):
         data["post_id"] = _post_id_from_url(data["external_url"]) or data.get("post_id")
+    await _validate_and_normalize_channel(data)
     for k, v in data.items():
         setattr(task, k, v)
     await db.commit()

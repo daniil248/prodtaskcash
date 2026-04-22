@@ -69,6 +69,46 @@ def _validate_channel_id_for_api(channel_id: str) -> str | None:
     return "Неверный формат канала. Укажите @username или ссылку t.me/username."
 
 
+async def validate_bot_sees_channel(channel_id: str) -> tuple[bool, str, str]:
+    """Проверяет что бот видит канал (= он админ).
+    Вызывается при сохранении subscribe/like задания в админке.
+    Возвращает (ok, error_message, normalized_channel_id).
+
+    - (True, "", "-1001234567890") — бот видит канал, отдаём нормализованный ID
+    - (False, "текст ошибки", "") — канал не найден, бот не админ, или формат неверный
+    """
+    err = _validate_channel_id_for_api(channel_id)
+    if err:
+        return False, err, ""
+    chat_id = _normalize_channel_id(channel_id)
+    if not chat_id:
+        return False, "Канал не указан", ""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.get(f"{TELEGRAM_API}/getChat", params={"chat_id": chat_id})
+            data = r.json()
+        if not data.get("ok"):
+            desc = (data.get("description") or "").lower()
+            log.info("validate_bot_sees_channel: %s -> %s", chat_id, data.get("description"))
+            if "chat not found" in desc:
+                return False, (
+                    "Бот не видит этот канал. Проверь, что @TaskCashAppBot добавлен админом "
+                    "и канал указан правильно: @username для публичного или -100… для приватного. "
+                    "Invite-ссылки (t.me/+…) сюда не подходят — используй её только в поле «Ссылка для перехода»."
+                ), ""
+            if "not enough rights" in desc or "administrator" in desc:
+                return False, "Бот есть в канале, но не назначен администратором. Дай ему права админа.", ""
+            return False, f"Ошибка Telegram: {data.get('description')}", ""
+        result = data.get("result", {})
+        resolved_id = str(result.get("id") or chat_id)
+        return True, "", resolved_id
+    except httpx.TimeoutException:
+        return False, "Telegram не ответил вовремя. Попробуй сохранить ещё раз.", ""
+    except Exception as e:
+        log.exception("validate_bot_sees_channel failed: %s", e)
+        return False, "Ошибка проверки канала. Попробуй позже.", ""
+
+
 async def check_subscription(telegram_id: int, channel_id: str) -> tuple[bool, str]:
     """Проверяет подписку через getChatMember. Бот должен быть админом канала."""
     err = _validate_channel_id_for_api(channel_id)

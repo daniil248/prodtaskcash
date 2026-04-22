@@ -502,17 +502,23 @@ export default function TasksAdminPage() {
             {form.task_type === 'subscribe' && (
               <div className="form-group">
                 <label className="form-label">
-                  Канал (username или ссылка) *
+                  Канал *
                   <span style={{ color: '#FE5A5B' }}> — для проверки подписки</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="gwwfwedw7777 или t.me/gwwfwedw7777 — не название канала!"
+                  placeholder="@username_канала или -1001234567890"
                   value={form.channel_id || ''}
                   onChange={(e) => setForm({ ...form, channel_id: e.target.value || null })}
                 />
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                  Указывайте <strong>username</strong> канала (из ссылки t.me/username) или полную ссылку. Не вводите название канала — проверка не сработает. Бот должен быть администратором канала.
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5, background: '#F8F8FC', padding: '8px 10px', borderRadius: 6, border: '1px solid #EEECF9' }}>
+                  <strong>Что вставить:</strong><br/>
+                  1. <strong>Публичный канал</strong> → <code>@username</code> (например <code>@taskcash_news</code>) или <code>t.me/username</code>.<br/>
+                  2. <strong>Приватный канал</strong> → числовой ID <code>-100XXXXXXXXXX</code>.<br/>
+                  &nbsp;&nbsp;&nbsp;Как узнать: перешли любой пост из канала в бота <code>@userinfobot</code> — он ответит <code>Id: -100…</code>, скопируй сюда.<br/>
+                  3. <strong>Не подойдёт:</strong> invite-link <code>t.me/+...</code> (это для поля «Ссылка для перехода»), название канала русскими буквами.<br/>
+                  <br/>
+                  <strong>Обязательно:</strong> добавь <code>@TaskCashAppBot</code> администратором в канал до сохранения. При сохранении мы проверим, что бот видит канал — если нет, покажется ошибка.
                 </div>
               </div>
             )}
