@@ -513,12 +513,13 @@ export default function TasksAdminPage() {
                 />
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5, background: '#F8F8FC', padding: '8px 10px', borderRadius: 6, border: '1px solid #EEECF9' }}>
                   <strong>Что вставить:</strong><br/>
-                  1. <strong>Публичный канал</strong> → <code>@username</code> (например <code>@taskcash_news</code>) или <code>t.me/username</code>.<br/>
+                  1. <strong>Публичный канал</strong> → <code>@username</code> или <code>t.me/username</code>.<br/>
                   2. <strong>Приватный канал</strong> → числовой ID <code>-100XXXXXXXXXX</code>.<br/>
-                  &nbsp;&nbsp;&nbsp;Как узнать: перешли любой пост из канала в бота <code>@userinfobot</code> — он ответит <code>Id: -100…</code>, скопируй сюда.<br/>
-                  3. <strong>Не подойдёт:</strong> invite-link <code>t.me/+...</code> (это для поля «Ссылка для перехода»), название канала русскими буквами.<br/>
+                  &nbsp;&nbsp;&nbsp;Как узнать ID: перешли любой пост из канала в <a href="https://t.me/idbot" target="_blank" rel="noreferrer"><code>@idbot</code></a> — он ответит <code>-100…</code>.<br/>
+                  &nbsp;&nbsp;&nbsp;Либо открой канал на <a href="https://web.telegram.org" target="_blank" rel="noreferrer">web.telegram.org</a> — в адресной строке будет <code>#-100…</code>.<br/>
+                  3. <strong>Не подойдёт:</strong> invite-link <code>t.me/+…</code> (это для поля «Ссылка для перехода»), название канала, кириллица.<br/>
                   <br/>
-                  <strong>Обязательно:</strong> добавь <code>@TaskCashAppBot</code> администратором в канал до сохранения. При сохранении мы проверим, что бот видит канал — если нет, покажется ошибка.
+                  <strong>Обязательно:</strong> добавь <code>@TaskCashAppBot</code> администратором в канал <em>до</em> сохранения. Мы проверим при сохранении — если бот не видит канал, задание не сохранится и покажется ошибка.
                 </div>
               </div>
             )}
